@@ -22,7 +22,34 @@ gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
 
 ## Usage
 
-TODO: Write usage instructions here
+### Single host interactions
+
+```ruby
+# instanciate new host with password
+host = Herd::Host.new("tesla.com", "elon", password: "T0pS3kr3t")
+# or with key
+host = Herd::Host.new("tesla.com", "elon", private_key_path: "~/.ssh/id_ed25519")
+
+# run single command
+host.exec("hostname")
+# or run block of commands
+host.exec do
+  hostname + uptime
+end
+```
+
+### Multiple hosts interactions
+
+```ruby
+another_host = Herd::Host.new("tesla.com", "elon", private_key_path: "~/.ssh/id_ed25519")
+runner = Runner.new([host, another_host])
+
+# run single command on all hosts in parallel
+runner.exec("hostname") # ["alpha001\n", "omega001\n"]
+
+# or run block of commands on all hosts in parallel
+runner.exec { hostname + uptime } # ["alpha001\n2000 years\n", "omega001\2500 years\n"]
+```
 
 ## Development
 

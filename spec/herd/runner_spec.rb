@@ -9,14 +9,25 @@ RSpec.describe Herd::Runner do
   let(:second_host) { instance_double(Herd::Host) }
 
   describe "exec" do
-    before do
-      allow(first_host).to receive(:exec).with("hostname").and_return("alpha001")
-      allow(second_host).to receive(:exec).with("hostname").and_return("alpha002")
-    end
-
     context "when run single command" do
+      before do
+        allow(first_host).to receive(:exec).with("hostname").and_return("alpha001")
+        allow(second_host).to receive(:exec).with("hostname").and_return("alpha002")
+      end
+
       it "runs the command in parallel on all hosts" do
         expect(runner.exec("hostname")).to eq(%w[alpha001 alpha002])
+      end
+    end
+
+    context "when run blocks of commands" do
+      before do
+        allow(first_host).to receive(:exec).with(nil).and_return("alpha001")
+        allow(second_host).to receive(:exec).with(nil).and_return("alpha002")
+      end
+
+      it "runs the command in parallel on all hosts" do
+        expect(runner.exec { hostname }).to eq(%w[alpha001 alpha002])
       end
     end
   end

@@ -9,9 +9,9 @@ module Herd
       @hosts = hosts
     end
 
-    def exec(command)
+    def exec(command = nil, &block)
       threads = hosts.map do |host|
-        Thread.new { host.exec(command) }
+        Thread.new { host.exec(command, &block) }
       end
 
       threads.each(&:join)
