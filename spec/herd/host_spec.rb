@@ -22,13 +22,17 @@ RSpec.describe Herd::Host do
       expect(mock_ssh_session).to have_received(:exec!).with("hostname")
     end
 
-    it "runs given command on the host" do
-      expect(host.exec("hostname")).to eq("alpha001")
+    context "when run single command" do
+      it "runs given command on the host" do
+        expect(host.exec("hostname")).to eq("alpha001")
+      end
     end
 
-    it "runs commands in within given block" do
-      result = host.exec { hostname }
-      expect(result).to eq("alpha001")
+    context "when run block of commands" do
+      it "runs commands in within given block" do
+        result = host.exec { hostname }
+        expect(result).to eq("alpha001")
+      end
     end
   end
 end

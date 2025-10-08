@@ -17,6 +17,7 @@ module Herd
 
       ssh.exec! command do |_, stream, data|
         raise ::Herd::CommandError, data if stream == :stderr
+
         return data
       end
     end
