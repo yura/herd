@@ -4,19 +4,15 @@ Fast host configuration tool.
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
-
-Install the gem and add to the application's Gemfile by executing:
+Herd is not yet published to RubyGems. To experiment locally:
 
 ```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+git clone https://github.com/yura/herd.git
+cd herd
+bundle install
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
-
-```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
-```
+Executables live in `bin/`, so you can run `bin/herd --help` directly from the repository.
 
 ## Usage
 
@@ -48,6 +44,25 @@ runner.exec("hostname") # ["alpha001\n", "omega001\n"]
 # or run block of commands on all hosts in parallel
 runner.exec { hostname + uptime } # ["alpha001\n2000 years\n", "omega001\2500 years\n"]
 ```
+
+### Configuration basics
+
+Configure global defaults via `Herd.configure`. Most setups only need to decide where to keep the state database:
+
+```ruby
+Herd.configure do |config|
+  config.state_store_adapter = :sqlite # :memory or nil to disable persistence
+  config.state_store_path = File.expand_path("tmp/herd-state.sqlite3", __dir__)
+end
+```
+
+Environment flags mirror the same behaviour:
+
+- `HERD_STATE_DB` — path to SQLite database (enables the adapter automatically).
+- `HERD_FORCE=1` — bypass cached results (same as CLI `--force`).
+- `HERD_STATE_STORE=memory|sqlite|none` — optional adapter override.
+
+The CLI (`bin/herd`) applies these settings before running recipes.
 
 ## Development
 
