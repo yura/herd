@@ -9,7 +9,7 @@
 - [x] Reporting: implement `RunReport` capturing start/success/fail, stdout/stderr, timing, exception class/message/backtrace, and task context.
 - [x] Reporting: add a structured console summary plus export (e.g., JSON) for later inspection.
 - [x] Persistence: define a `StateStore` interface plus in-memory adapter for task caching.
-- [ ] Persistence: build SQLite `StateStore` backend (via `sequel`) for durable caching.
+- [x] Persistence: build SQLite `StateStore` backend (via `sequel`) for durable caching.
 - [ ] Persistence: honor a `--force` flag to invalidate cached task results per host/task signature.
 - [ ] DSL: sketch a Ruby DSL for declaring hosts, tasks, and dependency graphs (support reusable modules).
 - [ ] Research: evaluate the concurrency model (thread pool vs async) once persistent sessions land.
@@ -27,8 +27,9 @@
 - 2025-10-09: Implemented `RunReport` summaries and JSON export with aggregation specs.
 - 2025-10-09: Introduced dependency-aware `TaskGraph` with skip propagation and reporting hooks.
 - 2025-10-09: Sketched `StateStore` interface with in-memory adapter, including force fetch semantics and invalidation tests.
+- 2025-10-09: Implemented SQLite-backed `StateStore` via Sequel with persistence specs and shared adapter tests.
 
 ## Next Session Prep
-- Sketch `StateStore` interface boundaries (`fetch/write/invalidate`, transactions) and enumerate persisted fields (status, stdout, stderr, timestamps, schema version).
-- Decide on cache invalidation semantics, signature hashing inputs (task params, version), and handling of `--force` across hosts.
-- Draft RSpec examples for in-memory `StateStore` adapter covering cache hits, force miss, and dependency skips.
+- Design signature builder API (task params, versioning) and document `--force` invalidation rules.
+- Integrate `StateStore` with `TaskGraph` execution flow (cache hits, skip recording).
+- Plan durable backend configuration (DB path discovery, migrations) and CLI options.
