@@ -26,5 +26,5 @@
 - 2025-10-09: Implemented `RunReport` summaries and JSON export with aggregation specs.
 
 ## Next Session Prep
-- Draft the `RunReport` API (events, serialization hooks, failure enrichment).
-- Plan a `Herd::Host`/`Session` refactor to separate connection lifecycle from command execution.
+- Outline task graph data structures (nodes, edges, failure propagation rules).
+- Sketch `StateStore` interface boundaries and identify required persistence metadata.
