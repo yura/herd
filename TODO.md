@@ -4,7 +4,7 @@
 - 2025-10-09: Set up TODO.md to track Herd evolution; captured reporting requirements (including exception metadata) and high-level goals addressing Ansible pain points.
 
 ## TODO
-- [ ] Core: keep persistent SSH sessions per host and reuse them during task execution.
+- [x] Core: keep persistent SSH sessions per host and reuse them during task execution.
 - [ ] Core: design a task graph with explicit dependencies and skip downstream tasks after failures.
 - [ ] Reporting: implement `RunReport` capturing start/success/fail, stdout/stderr, timing, exception class/message/backtrace, and task context.
 - [ ] Reporting: add a structured console summary plus export (e.g., JSON) for later inspection.
