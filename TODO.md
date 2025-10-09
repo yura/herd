@@ -20,6 +20,7 @@
 - 2025-10-09: Agreed failure reporting must include exception class, message, full backtrace, and task metadata.
 - 2025-10-09: Installed Ruby 3.2.8 via rbenv, aligned bundler 2.6.6, ran `bundle install`, and confirmed `bundle exec rspec` is green.
 - 2025-10-09: Wrote specs for `Herd::RunReport`, implemented lifecycle tracking with exception metadata, and kept the suite green under TDD (`bundle exec rspec`).
+- 2025-10-09: Extended `Runner#exec` to emit `RunReport` events for success/failure across hosts and covered new behavior with specs.
 
 ## Next Session Prep
 - Draft the `RunReport` API (events, serialization hooks, failure enrichment).
