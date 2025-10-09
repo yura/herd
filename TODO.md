@@ -5,7 +5,7 @@
 
 ## TODO
 - [x] Core: keep persistent SSH sessions per host and reuse them during task execution.
-- [ ] Core: design a task graph with explicit dependencies and skip downstream tasks after failures.
+- [x] Core: design a task graph with explicit dependencies and skip downstream tasks after failures.
 - [x] Reporting: implement `RunReport` capturing start/success/fail, stdout/stderr, timing, exception class/message/backtrace, and task context.
 - [x] Reporting: add a structured console summary plus export (e.g., JSON) for later inspection.
 - [ ] Persistence: define a `StateStore` interface and default SQLite backend (via `sequel`) for task caching.
@@ -24,7 +24,8 @@
 - 2025-10-09: Shifted `Host`/`Session` to persistent SSH connections with reconnection on failure, plus new specs for lifecycle management.
 - 2025-10-09: Added `ExecutionResult` plumbing so runner reports real stdout/stderr buffers and sessions keep last result (with error capture).
 - 2025-10-09: Implemented `RunReport` summaries and JSON export with aggregation specs.
+- 2025-10-09: Introduced dependency-aware `TaskGraph` with skip propagation and reporting hooks.
 
 ## Next Session Prep
-- Outline task graph data structures (nodes, edges, failure propagation rules).
 - Sketch `StateStore` interface boundaries and identify required persistence metadata.
+- Decide on cache invalidation semantics and signature format for persisted task results.

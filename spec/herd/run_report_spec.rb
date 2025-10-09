@@ -80,13 +80,36 @@ RSpec.describe Herd::RunReport do
         backtrace: ["/srv/setup.rb:12", "/srv/main.rb:3"]
       )
     end
+
+    it "records skipped tasks with reasons" do
+      allow(Time).to receive(:now).and_return(start_time, finish_time)
+
+      event = report.task_started(
+        host: "gamma",
+        task: "configure",
+        command: "configure"
+      )
+
+      report.task_skipped(event: event, reason: "dependency failed")
+
+      entry = report.events.first
+
+      expect(entry).to include(
+        host: "gamma",
+        task: "configure",
+        status: :skipped,
+        stdout: nil,
+        stderr: nil,
+        skip_reason: "dependency failed"
+      )
+    end
   end
 
   describe "aggregations" do
     let(:start_time) { Time.utc(2024, 1, 1, 12, 0, 0) }
     let(:mid_time) { start_time + 5 }
     let(:end_time) { start_time + 10 }
-    let(:clock_values) { [start_time, mid_time, start_time + 7, end_time] }
+    let(:clock_values) { [start_time, mid_time, start_time + 7, end_time, end_time + 2, end_time + 4] }
     let(:report) { described_class.new(clock: -> { clock_values.shift }) }
 
     it "renders a console summary" do
@@ -96,14 +119,20 @@ RSpec.describe Herd::RunReport do
       second = report.task_started(host: "beta", task: "clone", command: "clone")
       report.task_failed(event: second, exception: RuntimeError.new("boom"), stdout: "", stderr: "boom")
 
+      third = report.task_started(host: "gamma", task: "configure", command: "configure")
+      report.task_skipped(event: third, reason: "dependency failed")
+
       summary = report.summary
 
-      expect(summary).to include("Tasks: 2 total")
+      expect(summary).to include("Tasks: 3 total")
       expect(summary).to include("success: 1")
       expect(summary).to include("failed: 1")
+      expect(summary).to include("skipped: 1")
       expect(summary).to include("install@alpha")
       expect(summary).to include("clone@beta")
+      expect(summary).to include("configure@gamma")
       expect(summary).to include("RuntimeError")
+      expect(summary).to include("dependency failed")
     end
 
     it "serializes report as JSON" do

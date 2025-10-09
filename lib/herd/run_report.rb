@@ -28,7 +28,7 @@ module Herd
 
     # Marks the task as succeeded and stores output streams.
     def task_succeeded(event:, stdout:, stderr:)
-      finalize_event(event, status: :success, stdout: stdout, stderr: stderr, exception: nil)
+      finalize_event(event, status: :success, stdout: stdout, stderr: stderr, exception: nil, skip_reason: nil)
     end
 
     # Marks the task as failed and captures exception metadata.
@@ -39,7 +39,12 @@ module Herd
         backtrace: exception.backtrace
       }
 
-      finalize_event(event, status: :failed, stdout: stdout, stderr: stderr, exception: exception_payload)
+      finalize_event(event, status: :failed, stdout: stdout, stderr: stderr, exception: exception_payload, skip_reason: nil)
+    end
+
+    # Marks the task as skipped with an optional reason.
+    def task_skipped(event:, reason: nil)
+      finalize_event(event, status: :skipped, stdout: nil, stderr: nil, exception: nil, skip_reason: reason)
     end
 
     # Human readable summary string for the collected events.
@@ -92,12 +97,13 @@ module Herd
         duration: nil,
         stdout: nil,
         stderr: nil,
-        exception: nil
+        exception: nil,
+        skip_reason: nil
       }
     end
 
     # Updates the task event with completion data.
-    def finalize_event(event, status:, stdout:, stderr:, exception:)
+    def finalize_event(event, status:, stdout:, stderr:, exception:, skip_reason:)
       finished_at = current_time
 
       synchronize do
@@ -107,6 +113,7 @@ module Herd
         event[:finished_at] = finished_at
         event[:duration] = finished_at - event[:started_at]
         event[:exception] = exception
+        event[:skip_reason] = skip_reason
       end
 
       event
@@ -157,6 +164,8 @@ module Herd
 
       if event[:exception]
         line += format(" %s: %s", event[:exception][:class], event[:exception][:message])
+      elsif event[:status] == :skipped && event[:skip_reason]
+        line += format(" reason: %s", event[:skip_reason])
       end
 
       line
