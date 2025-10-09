@@ -10,7 +10,7 @@
 - [x] Reporting: add a structured console summary plus export (e.g., JSON) for later inspection.
 - [x] Persistence: define a `StateStore` interface plus in-memory adapter for task caching.
 - [x] Persistence: build SQLite `StateStore` backend (via `sequel`) for durable caching.
-- [ ] Persistence: honor a `--force` flag to invalidate cached task results per host/task signature.
+- [x] Persistence: honor a `--force` flag to invalidate cached task results per host/task signature.
 - [ ] DSL: sketch a Ruby DSL for declaring hosts, tasks, and dependency graphs (support reusable modules).
 - [ ] Research: evaluate the concurrency model (thread pool vs async) once persistent sessions land.
 - [ ] Meta: at each session start, reread `TODO.md` and append progress notes to the Dev Log before exiting.
@@ -28,8 +28,9 @@
 - 2025-10-09: Introduced dependency-aware `TaskGraph` with skip propagation and reporting hooks.
 - 2025-10-09: Sketched `StateStore` interface with in-memory adapter, including force fetch semantics and invalidation tests.
 - 2025-10-09: Implemented SQLite-backed `StateStore` via Sequel with persistence specs and shared adapter tests.
+- 2025-10-09: Wired TaskGraph caching/signatures and added configuration hooks for state storage.
 
 ## Next Session Prep
-- Design signature builder API (task params, versioning) and document `--force` invalidation rules.
-- Integrate `StateStore` with `TaskGraph` execution flow (cache hits, skip recording).
-- Plan durable backend configuration (DB path discovery, migrations) and CLI options.
+- Finalize CLI entry points/flags for enabling persistent cache and selecting adapter/path.
+- Document TaskGraph caching behavior (signature params, cache hit reporting) and provide usage examples.
+- Explore DSL integration for task parameters to feed signature builder.

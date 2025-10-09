@@ -1,11 +1,12 @@
 # frozen_string_literal: true
 
+require "digest"
 require "tsort"
 
 module Herd
-  # DAG of tasks with dependency-aware execution and reporting.
+  # DAG of tasks with dependency-aware execution, caching, and reporting.
   class TaskGraph
-    Task = Struct.new(:name, :depends_on, :action, keyword_init: true)
+    Task = Struct.new(:name, :depends_on, :action, :options, keyword_init: true)
 
     TaskResult = Struct.new(:name, :status, :value, :stdout, :stderr, :error, :skip_reason, keyword_init: true) do
       def success?
@@ -29,34 +30,44 @@ module Herd
       end
     end
 
-    def initialize(report: nil)
+    def initialize(report: nil, state_store: nil, signature_builder: nil)
       @report = report
+      @signature_builder = signature_builder || default_signature_builder
+      @state_store = state_store || Herd.configuration.build_state_store
       @tasks = {}
     end
 
-    def task(name, depends_on: [], &block)
+    def task(name, depends_on: [], **options, &block)
       raise ArgumentError, "block required for task #{name}" unless block
 
       string_name = name.to_s
       raise ArgumentError, "task #{string_name} already defined" if tasks.key?(string_name)
 
       dependencies = Array(depends_on).map(&:to_s)
-      tasks[string_name] = Task.new(name: string_name, depends_on: dependencies, action: block)
+      tasks[string_name] = Task.new(name: string_name, depends_on: dependencies, action: block, options: options)
     end
 
-    def run(host:, context: nil)
+    def run(host:, context: nil, params: {}, force: false)
       validate_dependencies!
 
       results = {}
 
       topological_order.each do |task_name|
         task = tasks.fetch(task_name)
+        signature = build_signature(task, params)
 
         if dependency_unsatisfied?(task, results)
           reason = build_skip_reason(task, results)
           event = start_event(task, host)
           report&.task_skipped(event: event, reason: reason)
           results[task_name] = TaskResult.new(name: task_name, status: :skipped, value: nil, stdout: nil, stderr: nil, error: nil, skip_reason: reason)
+          next
+        end
+
+        cached_result = fetch_cached_result(task, host, signature, force: force)
+        if cached_result
+          results[task_name] = cached_result
+          mark_downstream_cached(results, task, cached_result)
           next
         end
 
@@ -67,6 +78,15 @@ module Herd
           raw_result = task.action.call(context)
           normalized = normalize_result(raw_result)
           report&.task_succeeded(event: event, stdout: normalized[:stdout], stderr: normalized[:stderr])
+          entry = Herd::StateStore::Entry.new(
+            status: :success,
+            stdout: normalized[:stdout],
+            stderr: normalized[:stderr],
+            value: normalized[:value],
+            schema_version: schema_version(task)
+          )
+          write_cache(task, host, signature, entry)
+
           results[task_name] = TaskResult.new(
             name: task_name,
             status: :success,
@@ -101,7 +121,7 @@ module Herd
 
     private
 
-    attr_reader :report, :tasks
+    attr_reader :report, :state_store, :signature_builder, :tasks
 
     def validate_dependencies!
       tasks.each_value do |task|
@@ -139,15 +159,80 @@ module Herd
     def dependency_unsatisfied?(task, results)
       task.depends_on.any? do |dependency|
         dependency_result = results[dependency]
-        dependency_result.nil? || dependency_result.status != :success
+        dependency_result.nil? || !successful_status?(dependency_result.status)
       end
+    end
+
+    def fetch_cached_result(task, host, signature, force:)
+      return nil unless state_store && signature
+
+      entry = state_store.fetch(host: host, task: task.name, signature: signature, force: force)
+      return nil unless entry
+
+      report&.task_skipped(
+        event: start_event(task, host),
+        reason: "cache hit"
+      )
+
+      TaskResult.new(
+        name: task.name,
+        status: :cached,
+        value: entry.value,
+        stdout: entry.stdout,
+        stderr: entry.stderr,
+        error: nil,
+        skip_reason: "cache hit"
+      )
+    end
+
+    def mark_downstream_cached(results, task, cached_result)
+      return unless cached_result.status == :cached
+
+      task.depends_on.each do |dependency|
+        dependency_result = results[dependency]
+        next unless dependency_result&.status == :cached
+
+        dependency_result.skip_reason ||= "cache hit"
+      end
+    end
+
+    def write_cache(task, host, signature, entry)
+      return unless state_store && signature
+
+      state_store.write(host: host, task: task.name, signature: signature, entry: entry)
+    end
+
+    def schema_version(task)
+      task.options[:schema_version] || 1
+    end
+
+    def build_signature(task, params)
+      return unless signature_builder
+
+      signature_builder.call(task.name, params.merge(task.options[:signature_params] || {}))
+    end
+
+    def default_signature_builder
+      lambda do |task_name, params|
+        normalized = params.to_a.sort_by { |(key, _)| key.to_s }
+        digest = Digest::SHA256.new
+        digest.update(task_name.to_s)
+        normalized.each do |key, value|
+          digest.update("|#{key}=#{value}")
+        end
+        digest.hexdigest
+      end
+    end
+
+    def successful_status?(status)
+      %i[success cached].include?(status)
     end
 
     def build_skip_reason(task, results)
       failed_dependencies = task.depends_on.filter_map do |dependency|
         dependency_result = results[dependency]
         next unless dependency_result
-        next if dependency_result.status == :success
+        next if successful_status?(dependency_result.status)
 
         "#{dependency} #{dependency_result.status}"
       end
@@ -197,4 +282,3 @@ module Herd
     end
   end
 end
-
