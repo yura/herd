@@ -8,7 +8,8 @@
 - [x] Core: design a task graph with explicit dependencies and skip downstream tasks after failures.
 - [x] Reporting: implement `RunReport` capturing start/success/fail, stdout/stderr, timing, exception class/message/backtrace, and task context.
 - [x] Reporting: add a structured console summary plus export (e.g., JSON) for later inspection.
-- [ ] Persistence: define a `StateStore` interface and default SQLite backend (via `sequel`) for task caching.
+- [x] Persistence: define a `StateStore` interface plus in-memory adapter for task caching.
+- [ ] Persistence: build SQLite `StateStore` backend (via `sequel`) for durable caching.
 - [ ] Persistence: honor a `--force` flag to invalidate cached task results per host/task signature.
 - [ ] DSL: sketch a Ruby DSL for declaring hosts, tasks, and dependency graphs (support reusable modules).
 - [ ] Research: evaluate the concurrency model (thread pool vs async) once persistent sessions land.
@@ -25,6 +26,7 @@
 - 2025-10-09: Added `ExecutionResult` plumbing so runner reports real stdout/stderr buffers and sessions keep last result (with error capture).
 - 2025-10-09: Implemented `RunReport` summaries and JSON export with aggregation specs.
 - 2025-10-09: Introduced dependency-aware `TaskGraph` with skip propagation and reporting hooks.
+- 2025-10-09: Sketched `StateStore` interface with in-memory adapter, including force fetch semantics and invalidation tests.
 
 ## Next Session Prep
 - Sketch `StateStore` interface boundaries (`fetch/write/invalidate`, transactions) and enumerate persisted fields (status, stdout, stderr, timestamps, schema version).
