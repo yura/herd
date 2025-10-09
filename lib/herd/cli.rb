@@ -11,6 +11,7 @@ module Herd
   class CLI
     attr_reader :options, :commands
 
+    # @param argv [Array<String>] raw command line arguments to parse.
     def initialize(argv)
       @options = {
         state_store: nil,
@@ -20,12 +21,18 @@ module Herd
       @argv = argv.dup
     end
 
+    # Parses global options without mutating configuration.
+    #
+    # @return [Hash] normalized options hash.
     def parse!
       parse_global_options!
       normalize_options
       options
     end
 
+    # Applies parsed configuration to {Herd.configuration}.
+    #
+    # @return [Hash] effective options.
     def apply!
       parse!
 
@@ -38,6 +45,9 @@ module Herd
       options
     end
 
+    # Executes the selected subcommand (currently only `run`).
+    #
+    # @return [Hash, void] options hash when no subcommand is given.
     def run!
       apply!
 
@@ -57,6 +67,9 @@ module Herd
 
     attr_reader :argv
 
+    # Parses options that apply before subcommand dispatch.
+    #
+    # @return [void]
     def parse_global_options!
       while argv.any?
         arg = argv.first
@@ -96,6 +109,9 @@ module Herd
       end
     end
 
+    # Builds the OptionParser for top-level flags.
+    #
+    # @return [OptionParser]
     def parser
       OptionParser.new do |opts|
         opts.banner = "Usage: herd [options]"
@@ -119,12 +135,19 @@ module Herd
       end
     end
 
+    # Normalizes option values (e.g., converts store names to symbols).
+    #
+    # @return [void]
     def normalize_options
       return unless options[:state_store]
 
       options[:state_store] = normalize_store(options[:state_store])
     end
 
+    # Converts user input into a supported state store symbol.
+    #
+    # @param store [String, Symbol, nil]
+    # @return [Symbol, nil]
     def normalize_store(store)
       return nil if store.nil?
 
@@ -141,6 +164,10 @@ module Herd
       end
     end
 
+    # Executes the `run` subcommand.
+    #
+    # @param args [Array<String>] command arguments (mutated while parsing).
+    # @return [void]
     def run_recipe(args)
       command_options = {
         hosts: [],
@@ -191,6 +218,11 @@ module Herd
       state_store&.close if state_store.respond_to?(:close)
     end
 
+    # Parses flags specific to the `run` subcommand.
+    #
+    # @param args [Array<String>] positional + flag arguments.
+    # @param command_options [Hash] accumulator for parsed options.
+    # @return [String] recipe path.
     def parse_run_options!(args, command_options)
       parser = OptionParser.new do |opts|
         opts.banner = "Usage: herd run <recipe.rb> [options]"
@@ -238,6 +270,10 @@ module Herd
       path
     end
 
+    # Splits KEY=VALUE strings.
+    #
+    # @param pair [String]
+    # @return [Array<(String, String)>]
     def parse_key_value(pair)
       key, value = pair.split("=", 2)
       raise OptionParser::InvalidArgument, "Expected KEY=VALUE, got '#{pair}'" if key.nil? || value.nil?
@@ -245,10 +281,18 @@ module Herd
       [key, value]
     end
 
+    # Loads a recipe file using the DSL loader.
+    #
+    # @param path [String]
+    # @return [Herd::DSL::Recipe]
     def load_recipe(path)
       Herd::DSL.load_file(path)
     end
 
+    # Merges parameters from provided files into command options.
+    #
+    # @param command_options [Hash]
+    # @return [void]
     def apply_params_files(command_options)
       command_options[:params_files].each do |path|
         data = load_params_file(path)
@@ -256,10 +300,18 @@ module Herd
       end
     end
 
+    # Parses comma-separated host lists.
+    #
+    # @param value [String]
+    # @return [Array<String>]
     def split_hosts(value)
       value.split(",").map(&:strip).reject(&:empty?)
     end
 
+    # Loads a params file in JSON or YAML format.
+    #
+    # @param path [String]
+    # @return [Hash]
     def load_params_file(path)
       content = File.read(path)
       case File.extname(path)
@@ -276,6 +328,10 @@ module Herd
       end.transform_keys(&:to_sym)
     end
 
+    # Consumes the next argv value or raises when missing.
+    #
+    # @param flag [String] flag name for error reporting.
+    # @return [String]
     def shift_required(flag)
       value = argv.shift
       raise OptionParser::MissingArgument, flag unless value

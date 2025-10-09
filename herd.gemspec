@@ -44,6 +44,7 @@ Gem::Specification.new do |spec|
   spec.add_development_dependency "rubocop", "~> 1.21"
   spec.add_development_dependency "rubocop-rake"
   spec.add_development_dependency "rubocop-rspec"
+  spec.add_development_dependency "yard", "~> 0.9"
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html

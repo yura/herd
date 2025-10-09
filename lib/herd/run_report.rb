@@ -6,6 +6,7 @@ require "time"
 module Herd
   # Collects lifecycle data for task execution runs.
   class RunReport
+    # @param clock [#call] monotonic time provider returning current time.
     def initialize(clock: -> { Time.now })
       @clock = clock
       @events = []
@@ -13,11 +14,17 @@ module Herd
     end
 
     # Returns a snapshot of current events.
+    # Returns a defensive copy of the tracked events.
+    #
+    # @return [Array<Hash>]
     def events
       synchronize { @events.map(&:dup) }
     end
 
     # Records that a task started running with the provided context.
+    #
+    # @param context [Hash] event metadata.
+    # @return [Hash] live event instance.
     def task_started(**context)
       event = default_event.merge(context)
 
@@ -26,11 +33,22 @@ module Herd
     end
 
     # Marks the task as succeeded and stores output streams.
+    #
+    # @param event [Hash] event returned by {#task_started}.
+    # @param stdout [String, nil]
+    # @param stderr [String, nil]
+    # @return [Hash] updated event.
     def task_succeeded(event:, stdout:, stderr:)
       finalize_event(event, status: :success, stdout: stdout, stderr: stderr, exception: nil, skip_reason: nil)
     end
 
     # Marks the task as failed and captures exception metadata.
+    #
+    # @param event [Hash]
+    # @param exception [Exception]
+    # @param stdout [String, nil]
+    # @param stderr [String, nil]
+    # @return [Hash] updated event.
     def task_failed(event:, exception:, stdout:, stderr:)
       exception_payload = {
         class: exception.class.name,
@@ -43,11 +61,17 @@ module Herd
     end
 
     # Marks the task as skipped with an optional reason.
+    #
+    # @param event [Hash]
+    # @param reason [String, nil]
+    # @return [Hash] updated event.
     def task_skipped(event:, reason: nil)
       finalize_event(event, status: :skipped, stdout: nil, stderr: nil, exception: nil, skip_reason: reason)
     end
 
     # Human readable summary string for the collected events.
+    #
+    # @return [String]
     def summary
       counts = aggregate_counts
       lines = []
@@ -69,6 +93,8 @@ module Herd
     end
 
     # Hash representation of the report useful for exporting.
+    #
+    # @return [Hash]
     def to_h
       counts = aggregate_counts
 
@@ -80,6 +106,8 @@ module Herd
     end
 
     # JSON export of the report.
+    #
+    # @return [String]
     def to_json(*)
       to_h.to_json(*)
     end

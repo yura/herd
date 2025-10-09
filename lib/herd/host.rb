@@ -7,6 +7,11 @@ module Herd
   class Host
     attr_reader :host, :user, :ssh_options, :last_execution
 
+    # @param host [String] remote hostname or IP.
+    # @param user [String] SSH username.
+    # @param port [Integer] SSH port.
+    # @param private_key_path [String, nil] path to SSH private key.
+    # @param password [String, nil] password fallback when no key is provided.
     def initialize(host, user, port: 22, private_key_path: nil, password: nil)
       @host = host
       @user = user
@@ -25,6 +30,10 @@ module Herd
     end
 
     # Executes a command or block within a persistent SSH session.
+    #
+    # @param command [String, nil]
+    # @yield remote block executed via {Session#execute}.
+    # @return [Object] command return value.
     def exec(command = nil, &)
       session = ensure_session
 
@@ -36,6 +45,8 @@ module Herd
     end
 
     # Closes the underlying SSH session explicitly.
+    #
+    # @return [void]
     def close
       reset_session
     end

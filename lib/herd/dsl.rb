@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 module Herd
+  # Ruby DSL for defining dependency-aware deployment recipes.
   module DSL
     # Builder collects task declarations for a recipe.
     class Builder
@@ -12,12 +13,23 @@ module Herd
         @report = Herd::RunReport.new
       end
 
+      # Returns current defaults or merges the provided hash into defaults.
+      #
+      # @param values [Hash, nil] default context/params.
+      # @return [Hash]
       def defaults(values = nil)
         return @defaults.dup if values.nil?
 
         @defaults.merge!(values)
       end
 
+      # Adds a task definition to the recipe builder.
+      #
+      # @param name [String, Symbol]
+      # @param depends_on [Array<String, Symbol>] list of prerequisite task names.
+      # @param options [Hash] extra task options (e.g., signature params).
+      # @yield [context] block executed when the task runs.
+      # @return [void]
       def task(name, depends_on: [], **options, &block)
         raise ArgumentError, "block required for task #{name}" unless block
 
@@ -29,6 +41,9 @@ module Herd
         }
       end
 
+      # Finalizes the builder into a {Recipe}.
+      #
+      # @return [Recipe]
       def build
         Recipe.new(tasks: tasks, defaults: @defaults.dup, report: report)
       end
@@ -44,6 +59,19 @@ module Herd
         @report = report
       end
 
+      # Executes the recipe for a single host.
+      #
+      # @param host [String] host name or identifier.
+      # @param params [Hash] runtime parameters merged with defaults.
+      # @param context [Hash, Object] mutable context passed into tasks.
+      # @param force [Boolean] bypass state store cache.
+      # @param options [Hash] additional execution options:
+      #   - +:state_store+ [Herd::StateStore::Memory, Herd::StateStore::SQLite]
+      #   - +:signature_builder+ [Proc] override signature generation.
+      #   - +:concurrency+ [Integer] max parallel tasks.
+      #   - +:summary_path+ [String] file path for text report.
+      #   - +:json_path+ [String] file path for JSON export.
+      # @return [Herd::TaskGraph::RunResult]
       def run(host:, params: {}, context: {}, force: false, **options)
         allowed = %i[state_store signature_builder concurrency summary_path json_path]
         unknown = options.keys - allowed
@@ -72,18 +100,27 @@ module Herd
       end
     end
 
+    # Internal module used to evaluate recipe files without polluting the main namespace.
     Loader = Module.new do
       extend Herd::DSL
     end
 
     module_function
 
+    # Builds a recipe in a DSL block.
+    #
+    # @yieldparam builder [Builder] context used to declare tasks.
+    # @return [Recipe]
     def define(&)
       builder = Builder.new
       builder.instance_exec(&)
       builder.build
     end
 
+    # Loads a recipe file using the DSL DSL::Loader context.
+    #
+    # @param path [String] recipe file path.
+    # @return [Recipe]
     def load_file(path)
       recipe = Loader.module_eval(File.read(path), path)
       raise ArgumentError, "Recipe #{path} must return Herd::DSL::Recipe" unless recipe.is_a?(Herd::DSL::Recipe)

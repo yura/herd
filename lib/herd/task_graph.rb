@@ -6,14 +6,42 @@ require "tsort"
 module Herd
   # DAG of tasks with dependency-aware execution, caching, and reporting.
   class TaskGraph
+    # Internal representation of a declared task.
+    #
+    # @!attribute name
+    #   @return [String]
+    # @!attribute depends_on
+    #   @return [Array<String>]
+    # @!attribute action
+    #   @return [Proc]
+    # @!attribute options
+    #   @return [Hash]
     Task = Struct.new(:name, :depends_on, :action, :options, keyword_init: true)
 
+    # Represents the outcome of executing (or skipping) a task.
+    #
+    # @!attribute name
+    #   @return [String]
+    # @!attribute status
+    #   @return [Symbol] :success, :failed, :cached, :skipped.
+    # @!attribute value
+    #   @return [Object, nil]
+    # @!attribute stdout
+    #   @return [String, nil]
+    # @!attribute stderr
+    #   @return [String, nil]
+    # @!attribute error
+    #   @return [Exception, nil]
+    # @!attribute skip_reason
+    #   @return [String, nil]
     TaskResult = Struct.new(:name, :status, :value, :stdout, :stderr, :error, :skip_reason, keyword_init: true) do
+      # @return [Boolean]
       def success?
         status == :success
       end
     end
 
+    # Aggregates results for every task in the graph.
     class RunResult
       attr_reader :results
 
@@ -21,15 +49,23 @@ module Herd
         @results = results
       end
 
+      # Fetches the result for the given task.
+      #
+      # @param name [String, Symbol]
+      # @return [TaskResult]
       def [](name)
         results.fetch(name.to_s)
       end
 
+      # @return [Boolean] true when no task failed.
       def success?
         results.values.none? { |result| result.status == :failed }
       end
     end
 
+    # @param report [Herd::RunReport, nil] lifecycle report sink.
+    # @param state_store [Object, nil] explicit state store override.
+    # @param signature_builder [Proc, nil]
     def initialize(report: nil, state_store: nil, signature_builder: nil)
       @report = report
       @signature_builder = signature_builder || default_signature_builder
@@ -37,6 +73,13 @@ module Herd
       @tasks = {}
     end
 
+    # Registers a new task within the graph.
+    #
+    # @param name [String, Symbol]
+    # @param depends_on [Array<String, Symbol>]
+    # @param options [Hash] additional metadata (signature params, schema version).
+    # @yieldparam context [Object] shared context object.
+    # @return [void]
     def task(name, depends_on: [], **options, &block)
       raise ArgumentError, "block required for task #{name}" unless block
 
@@ -47,6 +90,14 @@ module Herd
       tasks[string_name] = Task.new(name: string_name, depends_on: dependencies, action: block, options: options)
     end
 
+    # Executes the graph respecting dependencies, caching, and concurrency.
+    #
+    # @param host [String]
+    # @param context [Hash, Object, nil]
+    # @param params [Hash]
+    # @param force [Boolean]
+    # @param concurrency [Integer, nil]
+    # @return [RunResult]
     def run(host:, context: nil, params: {}, force: false, concurrency: nil)
       concurrency = resolve_concurrency(concurrency)
       context ||= {}

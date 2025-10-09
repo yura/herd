@@ -5,11 +5,18 @@ module Herd
   class Runner
     attr_reader :hosts
 
+    # @param hosts [Array<#exec>] collection of host-like objects.
     def initialize(hosts)
       @hosts = hosts
     end
 
     # Executes the command (or block) on every host, optionally reporting progress.
+    #
+    # @param command [String, nil] command executed remotely.
+    # @param task [String, Symbol, nil] logical task name for reporting.
+    # @param report [Herd::RunReport, nil] optional report for lifecycle events.
+    # @yield remote block executed on each host when +command+ is nil.
+    # @return [Array<Object>] per-host return values.
     def exec(command = nil, task: nil, report: nil, &block)
       task_block = block
 

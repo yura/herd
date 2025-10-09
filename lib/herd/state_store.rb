@@ -3,23 +3,53 @@
 require "sequel"
 
 module Herd
+  # Namespaces persistence adapters for cached task state.
   module StateStore
+    # Serialized cache entry returned by adapters.
+    #
+    # @!attribute status
+    #   @return [Symbol] result status (:success, :cached, etc.).
+    # @!attribute stdout
+    #   @return [String, nil]
+    # @!attribute stderr
+    #   @return [String, nil]
+    # @!attribute value
+    #   @return [Object, nil] marshalled return value.
+    # @!attribute schema_version
+    #   @return [Integer] used for invalidating stale caches.
+    # @!attribute updated_at
+    #   @return [Time] timestamp of last write.
     Entry = Struct.new(:status, :stdout, :stderr, :value, :schema_version, :updated_at, keyword_init: true)
 
     # In-memory implementation primarily for testing.
     class Memory
+      # @param clock [#call] monotonic time provider.
       def initialize(clock: -> { Time.now })
         @clock = clock
         @store = {}
         @mutex = Mutex.new
       end
 
+      # Retrieves a cached entry or nil.
+      #
+      # @param host [String]
+      # @param task [String]
+      # @param signature [String]
+      # @param force [Boolean]
+      # @return [Entry, nil]
       def fetch(host:, task:, signature:, force: false)
         return nil if force
 
         synchronize { @store[key(host, task, signature)]&.dup }
       end
 
+      # Persists a cache entry.
+      #
+      # @param host [String]
+      # @param task [String]
+      # @param signature [String]
+      # @param entry [Entry]
+      # @return [Entry] timestamped entry.
       def write(host:, task:, signature:, entry:)
         timestamped = entry.dup
         timestamped.updated_at = clock.call
@@ -31,6 +61,11 @@ module Herd
         timestamped
       end
 
+      # Removes cached entries for a task on the given host.
+      #
+      # @param host [String]
+      # @param task [String]
+      # @return [void]
       def invalidate(host:, task:)
         synchronize do
           prefix = key_prefix(host, task)
@@ -59,14 +94,24 @@ module Herd
 
     # SQLite-backed persistent state store using Sequel.
     class SQLite
+      # Table storing cached results.
       TABLE_NAME = :state_entries
 
+      # @param path [String] SQLite file path.
+      # @param clock [#call] monotonic time provider.
       def initialize(path:, clock: -> { Time.now })
         @clock = clock
         @db = Sequel.sqlite(path)
         migrate!
       end
 
+      # Fetches a cached entry or nil.
+      #
+      # @param host [String]
+      # @param task [String]
+      # @param signature [String]
+      # @param force [Boolean]
+      # @return [Entry, nil]
       def fetch(host:, task:, signature:, force: false)
         return nil if force
 
@@ -76,6 +121,13 @@ module Herd
         build_entry(row)
       end
 
+      # Inserts or updates an entry for the provided signature.
+      #
+      # @param host [String]
+      # @param task [String]
+      # @param signature [String]
+      # @param entry [Entry]
+      # @return [Entry]
       def write(host:, task:, signature:, entry:)
         timestamp = clock.call
 
@@ -98,10 +150,18 @@ module Herd
         fetch(host: host, task: task, signature: signature)
       end
 
+      # Removes cached entries for the given host/task pair.
+      #
+      # @param host [String]
+      # @param task [String]
+      # @return [void]
       def invalidate(host:, task:)
         dataset.where(host: host, task: task).delete
       end
 
+      # Closes the underlying database connection.
+      #
+      # @return [void]
       def close
         db.disconnect
       end

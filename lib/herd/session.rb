@@ -3,10 +3,12 @@
 module Herd
   # Session for executing commands on the remote host.
   class Session
+    # Remote helpers exposed as Ruby methods inside {#execute}.
     COMMANDS = %i[hostname].freeze
 
     attr_reader :ssh, :last_result
 
+    # @param ssh [Net::SSH::Connection::Session] open SSH connection.
     def initialize(ssh)
       @ssh = ssh
       reset_buffers
@@ -14,6 +16,10 @@ module Herd
     end
 
     # Runs a direct command or evaluates a block within the session.
+    #
+    # @param command [String, nil] literal command to execute.
+    # @yield DSL block evaluated with SSH helpers.
+    # @return [Herd::ExecutionResult]
     def execute(command = nil, &)
       reset_buffers
       value = nil
@@ -31,19 +37,29 @@ module Herd
     end
 
     # Closes the underlying SSH connection.
+    #
+    # @return [void]
     def close
       ssh.close unless closed?
     end
 
     # Indicates whether the SSH connection has been closed.
+    #
+    # @return [Boolean]
     def closed?
       ssh.closed?
     end
 
+    # Dispatches unknown methods to remote commands (e.g., +hostname+).
+    #
+    # @param cmd [Symbol]
+    # @param args [Array]
+    # @return [String] command output.
     def method_missing(cmd, *args)
       run(build_command(cmd, args))
     end
 
+    # @return [Boolean]
     def respond_to_missing?(cmd)
       COMMANDS.include?(cmd) || super
     end
