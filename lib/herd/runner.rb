@@ -28,11 +28,18 @@ module Herd
       event = start_event(report, host, task, command)
 
       result = host.exec(command, &block)
-      report&.task_succeeded(event: event, stdout: result, stderr: nil) if event
+      execution = host.last_execution
+      report&.task_succeeded(event: event, stdout: execution_stdout(execution), stderr: execution_stderr(execution)) if event
       result
     rescue StandardError => e
+      execution = host.last_execution
       if report
-        report.task_failed(event: event || start_event(report, host, task, command), exception: e, stdout: nil, stderr: nil)
+        report.task_failed(
+          event: event || start_event(report, host, task, command),
+          exception: e,
+          stdout: execution_stdout(execution),
+          stderr: execution_stderr(execution)
+        )
       end
       raise
     end
@@ -51,6 +58,16 @@ module Herd
     # Extracts a host identifier for reporting purposes.
     def host_identifier(host)
       host.respond_to?(:host) ? host.host : host.to_s
+    end
+
+    # Extracts stdout for reporting.
+    def execution_stdout(execution)
+      execution&.stdout
+    end
+
+    # Extracts stderr for reporting.
+    def execution_stderr(execution)
+      execution&.stderr
     end
   end
 end

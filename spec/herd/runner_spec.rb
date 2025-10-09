@@ -18,6 +18,12 @@ RSpec.describe Herd::Runner do
         allow(second_host).to receive(:exec).with("hostname").and_return("alpha002")
         allow(first_host).to receive(:host).and_return("first.example")
         allow(second_host).to receive(:host).and_return("second.example")
+        allow(first_host).to receive(:last_execution).and_return(
+          Herd::ExecutionResult.new(value: "alpha001", stdout: "alpha001", stderr: "")
+        )
+        allow(second_host).to receive(:last_execution).and_return(
+          Herd::ExecutionResult.new(value: "alpha002", stdout: "alpha002", stderr: "")
+        )
       end
 
       it "runs the command in parallel on all hosts" do
@@ -34,7 +40,7 @@ RSpec.describe Herd::Runner do
             command: "hostname",
             status: :success,
             stdout: "alpha001",
-            stderr: nil
+            stderr: ""
           ),
           include(
             host: "second.example",
@@ -42,7 +48,7 @@ RSpec.describe Herd::Runner do
             command: "hostname",
             status: :success,
             stdout: "alpha002",
-            stderr: nil
+            stderr: ""
           )
         )
       end
@@ -54,6 +60,12 @@ RSpec.describe Herd::Runner do
         allow(second_host).to receive(:exec).with(nil).and_return("alpha002")
         allow(first_host).to receive(:host).and_return("first.example")
         allow(second_host).to receive(:host).and_return("second.example")
+        allow(first_host).to receive(:last_execution).and_return(
+          Herd::ExecutionResult.new(value: "alpha001", stdout: "alpha001", stderr: "")
+        )
+        allow(second_host).to receive(:last_execution).and_return(
+          Herd::ExecutionResult.new(value: "alpha002", stdout: "alpha002", stderr: "")
+        )
       end
 
       it "runs the command in parallel on all hosts" do
@@ -63,6 +75,9 @@ RSpec.describe Herd::Runner do
       it "records failures with exception metadata" do
         error = RuntimeError.new("boom")
         allow(first_host).to receive(:exec).with(nil).and_raise(error)
+        allow(first_host).to receive(:last_execution).and_return(
+          Herd::ExecutionResult.new(value: nil, stdout: "", stderr: "boom")
+        )
 
         expect do
           runner.exec(task: "block run", report: run_report) { hostname }
@@ -74,8 +89,8 @@ RSpec.describe Herd::Runner do
           task: "block run",
           command: nil,
           status: :failed,
-          stdout: nil,
-          stderr: nil
+          stdout: "",
+          stderr: "boom"
         )
 
         expect(event[:exception]).to include(

@@ -31,6 +31,8 @@ RSpec.describe Herd::Host do
     context "when run single command" do
       it "runs given command on the host" do
         expect(host.exec("hostname")).to eq("alpha001")
+        expect(host.last_execution.stdout).to eq("alpha001")
+        expect(host.last_execution.stderr).to eq("")
       end
     end
 
@@ -38,6 +40,8 @@ RSpec.describe Herd::Host do
       it "runs commands in within given block" do
         result = host.exec { hostname }
         expect(result).to eq("alpha001")
+        expect(host.last_execution.stdout).to eq("alpha001")
+        expect(host.last_execution.stderr).to eq("")
       end
     end
 
@@ -69,7 +73,12 @@ RSpec.describe Herd::Host do
       allow(working_session).to receive(:exec!).with("hostname").and_return("alpha001")
 
       expect { host.exec("hostname") }.to raise_error(IOError)
+      expect(host.last_execution.stdout).to eq("")
+      expect(host.last_execution.stderr).to eq("")
+
       expect(host.exec("hostname")).to eq("alpha001")
+      expect(host.last_execution.stdout).to eq("alpha001")
+      expect(host.last_execution.stderr).to eq("")
 
       expect(Net::SSH).to have_received(:start).twice
       expect(failing_session).to have_received(:close)

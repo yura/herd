@@ -33,11 +33,23 @@ RSpec.describe Herd::Session do
     end
 
     it "runs provided command" do
-      expect(session.execute("hostname")).to eq("alpha001")
+      result = session.execute("hostname")
+
+      expect(result).to have_attributes(
+        value: "alpha001",
+        stdout: "alpha001",
+        stderr: ""
+      )
     end
 
     it "evaluates provided block" do
-      expect(session.execute { hostname }).to eq("alpha001")
+      result = session.execute { hostname }
+
+      expect(result).to have_attributes(
+        value: "alpha001",
+        stdout: "alpha001",
+        stderr: ""
+      )
     end
   end
 
@@ -52,6 +64,20 @@ RSpec.describe Herd::Session do
     it "delegates to SSH session" do
       allow(mock_ssh_session).to receive(:closed?).and_return(true)
       expect(session).to be_closed
+    end
+  end
+
+  describe "error handling" do
+    it "stores last result when command raises" do
+      allow(mock_ssh_session).to receive(:exec!).with("hostname") do |&block|
+        block&.call(nil, :stderr, "permission denied")
+        nil
+      end
+
+      expect { session.execute("hostname") }.to raise_error(Herd::CommandError)
+
+      result = session.last_result
+      expect(result.stderr).to include("permission denied")
     end
   end
 end

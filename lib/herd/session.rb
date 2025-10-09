@@ -5,18 +5,29 @@ module Herd
   class Session
     COMMANDS = %i[hostname].freeze
 
-    attr_reader :ssh
+    attr_reader :ssh, :last_result
 
     def initialize(ssh)
       @ssh = ssh
+      reset_buffers
+      @last_result = nil
     end
 
     # Runs a direct command or evaluates a block within the session.
     def execute(command = nil, &block)
-      output = nil
-      output = public_send(command) if command
-      output = instance_exec(&block) if block_given?
-      output
+      reset_buffers
+      value = nil
+
+      begin
+        value = run(command) if command
+        value = instance_exec(&block) if block_given?
+        store_result(value)
+      rescue StandardError => e
+        store_result(value)
+        raise e
+      end
+
+      last_result
     end
 
     # Closes the underlying SSH connection.
@@ -30,9 +41,18 @@ module Herd
     end
 
     def method_missing(cmd, *args)
-      command = cmd.to_s
-      command += args.join(" ") if args.any?
+      run(build_command(cmd, args))
+    end
 
+    def respond_to_missing?(cmd)
+      COMMANDS.include?(cmd) || super
+    end
+
+    private
+
+    attr_reader :stdout_buffer, :stderr_buffer
+
+    def run(command)
       stdout = +""
       stderr = +""
 
@@ -47,13 +67,31 @@ module Herd
 
       stdout = result if stdout.empty? && result
 
+      append_to_buffers(stdout, stderr)
+
       raise ::Herd::CommandError, stderr unless stderr.empty?
 
       stdout
     end
 
-    def respond_to_missing?(cmd)
-      COMMANDS.include?(cmd) || super
+    def build_command(cmd, args)
+      parts = [cmd.to_s]
+      parts.concat(args.map(&:to_s)) if args.any?
+      parts.join(" ")
+    end
+
+    def append_to_buffers(stdout, stderr)
+      @stdout_buffer << stdout.to_s
+      @stderr_buffer << stderr.to_s
+    end
+
+    def reset_buffers
+      @stdout_buffer = +""
+      @stderr_buffer = +""
+    end
+
+    def store_result(value)
+      @last_result = Herd::ExecutionResult.new(value: value, stdout: stdout_buffer.dup, stderr: stderr_buffer.dup)
     end
   end
 end

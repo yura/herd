@@ -6,7 +6,7 @@ require "thread"
 module Herd
   # Target host maintaining a persistent SSH session.
   class Host
-    attr_reader :host, :user, :ssh_options
+    attr_reader :host, :user, :ssh_options, :last_execution
 
     def initialize(host, user, port: 22, private_key_path: nil, password: nil)
       @host = host
@@ -22,6 +22,7 @@ module Herd
       @session_mutex = Mutex.new
       @exec_mutex = Mutex.new
       @session = nil
+      @last_execution = nil
     end
 
     # Executes a command or block within a persistent SSH session.
@@ -29,9 +30,10 @@ module Herd
       session = ensure_session
 
       execute_with_session(session, command, &block)
-    rescue StandardError
-      reset_session
-      raise
+    rescue StandardError => e
+      @last_execution = session.last_result
+      reset_session(clear_last: false)
+      raise e
     end
 
     # Closes the underlying SSH session explicitly.
@@ -57,7 +59,9 @@ module Herd
     # Executes the command while serializing access per host.
     def execute_with_session(session, command, &block)
       @exec_mutex.synchronize do
-        session.execute(command, &block)
+        result = session.execute(command, &block)
+        @last_execution = result
+        result.value
       end
     end
 
@@ -67,10 +71,11 @@ module Herd
     end
 
     # Closes and clears any cached session.
-    def reset_session
+    def reset_session(clear_last: true)
       @session_mutex.synchronize do
         @session&.close
         @session = nil
+        @last_execution = nil if clear_last
       end
     end
   end
