@@ -31,8 +31,9 @@
 - 2025-10-09: Wired TaskGraph caching/signatures and added configuration hooks for state storage.
 - 2025-10-09: Added CLI options for state store selection/path and documented caching workflow in README.
 - 2025-10-09: Delivered Herd::DSL builder for reusable task recipes with signature params support.
+- 2025-10-09: Implemented `herd run` CLI command with recipe execution and per-host summaries.
 
 ## Next Session Prep
-- Implement CLI command to run recipes/graphs (`herd run <file>`), piping through configuration and reporting.
-- Expand documentation with full recipe example (multi-host execution, cache usage, CLI flags).
+- Extend CLI to accept parameter files (`--params-file`) and multiple hosts per command.
+- Expand documentation with a full recipe walkthrough (multi-host execution, cache usage, CLI flags).
 - Prototype concurrency options (thread pool vs async) aligned with TaskGraph execution.
