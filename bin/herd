@@ -1,0 +1,17 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "herd"
+require "herd/cli"
+
+cli = Herd::CLI.new(ARGV)
+cli.apply!
+
+# Placeholder: actual command execution to be implemented.
+if ARGV.empty?
+  puts "Herd configured."
+else
+  # Future command handling
+  puts "Herd configured with args: #{ARGV.inspect}"
+end

@@ -9,14 +9,18 @@ Gem::Specification.new do |spec|
   spec.email = ["yury.kotlyarov@gmail.com"]
 
   spec.summary = "Fast host configuration tool"
-  spec.description = "Simple ruby DSL for fast host configuration. Supports Ubuntu and requires SSH server running on each targets host."
+  spec.description = <<~DESC.strip
+    Simple ruby DSL for fast host configuration. Supports Ubuntu and
+    requires SSH server running on each targets host.
+  DESC
   spec.homepage = "https://github.com/yura/herd"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.2.0"
+  spec.required_ruby_version = ">= 3.4.0"
 
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/yura/herd"
+  spec.metadata["rubygems_mfa_required"] = "true"
   # spec.metadata["changelog_uri"] = "TODO: Put your gem's CHANGELOG.md URL here."
 
   # Specify which files should be added to the gem when it is released.
@@ -32,10 +36,15 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
+  spec.add_dependency "logger"
+  spec.add_dependency "sequel", "~> 5.80"
+  spec.add_dependency "sqlite3", "~> 1.7"
+
   spec.add_development_dependency "rspec", "~> 3.0"
   spec.add_development_dependency "rubocop", "~> 1.21"
   spec.add_development_dependency "rubocop-rake"
   spec.add_development_dependency "rubocop-rspec"
+  spec.add_development_dependency "yard", "~> 0.9"
 
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html
