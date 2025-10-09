@@ -38,6 +38,9 @@ Metrics/BlockLength:
 Metrics/ParameterLists:
   Max: 6
 
+Metrics/PerceivedComplexity:
+  Max: 15
+
 Style/Documentation:
   Enabled: false
 

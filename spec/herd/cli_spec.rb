@@ -62,4 +62,39 @@ RSpec.describe Herd::CLI do
       expect(File.read(flag_path)).to eq("ok")
     end
   end
+
+  it "loads params from file and supports multiple hosts" do
+    Dir.mktmpdir do |dir|
+      recipe_path = File.join(dir, "recipe.rb")
+      File.write(recipe_path, <<~RUBY)
+        Herd::DSL.define do
+          task "write" do |ctx|
+            host = ctx[:host].to_s
+            message = ctx[:params][:message].to_s
+            output = File.join(ctx[:dir], host + ".txt")
+            File.write(output, message)
+            Herd::ExecutionResult.new(value: message, stdout: message + "\n", stderr: "")
+          end
+        end
+      RUBY
+
+      params_path = File.join(dir, "params.yml")
+      File.write(params_path, "message: from_file\n")
+
+      cli = described_class.new([
+                                  "run",
+                                  recipe_path,
+                                  "--host", "alpha,beta",
+                                  "--params-file", params_path,
+                                  "--param", "message=override",
+                                  "--context", "dir=#{dir}"
+                                ])
+
+      expect { cli.run! }.to output(/Host alpha: success.*Host beta: success/m).to_stdout
+
+      %w[alpha beta].each do |host|
+        expect(File.read(File.join(dir, "#{host}.txt"))).to eq("override")
+      end
+    end
+  end
 end

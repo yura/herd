@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "optparse"
+require "json"
+require "yaml"
 
 module Herd
   # Minimal CLI for configuring Herd runtime options.
@@ -142,11 +144,14 @@ module Herd
         hosts: [],
         params: {},
         context: {},
+        params_files: [],
         force: ENV["HERD_FORCE"] == "1"
       }
 
       recipe_path = parse_run_options!(args, command_options)
       recipe = load_recipe(recipe_path)
+
+      apply_params_files(command_options)
 
       hosts = command_options[:hosts]
       hosts = ["localhost"] if hosts.empty?
@@ -154,6 +159,8 @@ module Herd
       state_store = Herd.configuration.build_state_store
       results = hosts.map do |host|
         context = command_options[:context].dup
+        context[:host] ||= host
+        context[:params] ||= command_options[:params]
         result = recipe.run(
           host: host,
           params: command_options[:params],
@@ -176,8 +183,8 @@ module Herd
       parser = OptionParser.new do |opts|
         opts.banner = "Usage: herd run <recipe.rb> [options]"
 
-        opts.on("--host HOST", "Target host (repeatable)") do |value|
-          command_options[:hosts] << value
+        opts.on("--host HOSTS", "Target host(s), comma-separated or repeatable") do |value|
+          command_options[:hosts].concat(split_hosts(value))
         end
 
         opts.on("--param KEY=VALUE", "Runtime parameter") do |pair|
@@ -188,6 +195,10 @@ module Herd
         opts.on("--context KEY=VALUE", "Context value passed to tasks") do |pair|
           key, value = parse_key_value(pair)
           command_options[:context][key.to_sym] = value
+        end
+
+        opts.on("--params-file PATH", "Load runtime parameters from JSON or YAML file") do |path|
+          command_options[:params_files] << path
         end
 
         opts.on("--force", "Force rerun tasks") do
@@ -212,6 +223,33 @@ module Herd
 
     def load_recipe(path)
       Herd::DSL.load_file(path)
+    end
+
+    def apply_params_files(command_options)
+      command_options[:params_files].each do |path|
+        data = load_params_file(path)
+        command_options[:params] = data.merge(command_options[:params])
+      end
+    end
+
+    def split_hosts(value)
+      value.split(",").map(&:strip).reject(&:empty?)
+    end
+
+    def load_params_file(path)
+      content = File.read(path)
+      case File.extname(path)
+      when ".json"
+        JSON.parse(content)
+      when ".yml", ".yaml"
+        YAML.safe_load(content, aliases: true) || {}
+      else
+        begin
+          JSON.parse(content)
+        rescue JSON::ParserError
+          YAML.safe_load(content, aliases: true) || {}
+        end
+      end.transform_keys(&:to_sym)
     end
 
     def shift_required(flag)
