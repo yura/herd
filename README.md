@@ -61,6 +61,40 @@ After checking out the repo, run `bin/setup` to install dependencies. Then, run 
 
 To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
 
+## Caching and state store
+
+The task graph can persist results between runs to avoid re-executing long steps. By default, caching is disabled; enable it by configuring a state store:
+
+```ruby
+Herd.configure do |config|
+  config.state_store_adapter = :sqlite
+  config.state_store_path = "/var/lib/herd/state.sqlite3"
+end
+
+graph = Herd::TaskGraph.new(report: Herd::RunReport.new)
+graph.run(host: "alpha", params: { version: "v1" })
+```
+
+You can also configure it from the CLI:
+
+```sh
+bin/herd --state-store sqlite --state-path /var/lib/herd/state.sqlite3
+```
+
+Set `--state-store none` (or `state_store_adapter = nil`) to disable persistence.
+
+Each task can contribute to the cache signature via `signature_params`. For example:
+
+```ruby
+graph.task "configure",
+           depends_on: ["install"],
+           signature_params: ->(ctx, params) { { version: params[:version], config_hash: ctx[:config_hash] } } do |ctx|
+  # ...
+end
+```
+
+At runtime, pass `params:` and optionally `force: true` to `run` to invalidate cached entries for the current host/task signature.
+
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/yura/herd. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/yura/herd/blob/main/CODE_OF_CONDUCT.md).

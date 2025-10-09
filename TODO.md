@@ -29,6 +29,7 @@
 - 2025-10-09: Sketched `StateStore` interface with in-memory adapter, including force fetch semantics and invalidation tests.
 - 2025-10-09: Implemented SQLite-backed `StateStore` via Sequel with persistence specs and shared adapter tests.
 - 2025-10-09: Wired TaskGraph caching/signatures and added configuration hooks for state storage.
+- 2025-10-09: Added CLI options for state store selection/path and documented caching workflow in README.
 
 ## Next Session Prep
 - Finalize CLI entry points/flags for enabling persistent cache and selecting adapter/path.

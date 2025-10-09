@@ -54,7 +54,7 @@ module Herd
 
       topological_order.each do |task_name|
         task = tasks.fetch(task_name)
-        signature = build_signature(task, params)
+        signature = build_signature(task, params, context)
 
         if dependency_unsatisfied?(task, results)
           reason = build_skip_reason(task, results)
@@ -67,7 +67,6 @@ module Herd
         cached_result = fetch_cached_result(task, host, signature, force: force)
         if cached_result
           results[task_name] = cached_result
-          mark_downstream_cached(results, task, cached_result)
           next
         end
 
@@ -185,17 +184,6 @@ module Herd
       )
     end
 
-    def mark_downstream_cached(results, task, cached_result)
-      return unless cached_result.status == :cached
-
-      task.depends_on.each do |dependency|
-        dependency_result = results[dependency]
-        next unless dependency_result&.status == :cached
-
-        dependency_result.skip_reason ||= "cache hit"
-      end
-    end
-
     def write_cache(task, host, signature, entry)
       return unless state_store && signature
 
@@ -206,10 +194,11 @@ module Herd
       task.options[:schema_version] || 1
     end
 
-    def build_signature(task, params)
+    def build_signature(task, params, context = nil)
       return unless signature_builder
 
-      signature_builder.call(task.name, params.merge(task.options[:signature_params] || {}))
+      signature_params = params.merge(extract_signature_params(task, context, params))
+      signature_builder.call(task.name, signature_params)
     end
 
     def default_signature_builder
@@ -221,6 +210,19 @@ module Herd
           digest.update("|#{key}=#{value}")
         end
         digest.hexdigest
+      end
+    end
+
+    def extract_signature_params(task, context, params)
+      raw = task.options[:signature_params]
+      case raw
+      when Proc
+        value = raw.call(context, params)
+        value.respond_to?(:to_h) ? value.to_h : {}
+      when Hash
+        raw
+      else
+        {}
       end
     end
 
