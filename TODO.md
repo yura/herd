@@ -11,7 +11,7 @@
 - [x] Persistence: define a `StateStore` interface plus in-memory adapter for task caching.
 - [x] Persistence: build SQLite `StateStore` backend (via `sequel`) for durable caching.
 - [x] Persistence: honor a `--force` flag to invalidate cached task results per host/task signature.
-- [ ] DSL: sketch a Ruby DSL for declaring hosts, tasks, and dependency graphs (support reusable modules).
+- [x] DSL: sketch a Ruby DSL for declaring hosts, tasks, and dependency graphs (support reusable modules).
 - [ ] Research: evaluate the concurrency model (thread pool vs async) once persistent sessions land.
 - [ ] Meta: at each session start, reread `TODO.md` and append progress notes to the Dev Log before exiting.
 - [ ] Meta: practice TDD — write comprehensive tests for each change before implementing functionality.
@@ -30,8 +30,9 @@
 - 2025-10-09: Implemented SQLite-backed `StateStore` via Sequel with persistence specs and shared adapter tests.
 - 2025-10-09: Wired TaskGraph caching/signatures and added configuration hooks for state storage.
 - 2025-10-09: Added CLI options for state store selection/path and documented caching workflow in README.
+- 2025-10-09: Delivered Herd::DSL builder for reusable task recipes with signature params support.
 
 ## Next Session Prep
-- Finalize CLI entry points/flags for enabling persistent cache and selecting adapter/path.
-- Document TaskGraph caching behavior (signature params, cache hit reporting) and provide usage examples.
-- Explore DSL integration for task parameters to feed signature builder.
+- Implement CLI command to run recipes/graphs (`herd run <file>`), piping through configuration and reporting.
+- Expand documentation with full recipe example (multi-host execution, cache usage, CLI flags).
+- Prototype concurrency options (thread pool vs async) aligned with TaskGraph execution.
