@@ -192,6 +192,30 @@ The DSL merges `defaults` with runtime `params` and passes both into the signatu
 
     Each host inherits `params` and `context`; repeatable `--host` flags or comma-separated lists are supported. Local context receives the resolved `:host`, while `:params` contains merged defaults, files and CLI overrides.
 
+### Report exports
+
+Persist run metadata alongside console output when invoking the CLI:
+
+```bash
+bin/herd run deploy.rb \
+  --host alpha,beta \
+  --report-summary tmp/report.txt \
+  --report-json tmp/report.json
+```
+
+`--report-summary` writes the human-readable summary, while `--report-json` stores the structured `RunReport` payload. The DSL exposes the same capability when you call `recipe.run` directly:
+
+```ruby
+recipe.run(
+  host: "alpha",
+  context: context,
+  summary_path: "tmp/report.txt",
+  json_path: "tmp/report.json"
+)
+```
+
+Both paths are created automatically, so nested directories (e.g. `tmp/reports/alpha.txt`) work without extra setup.
+
 4. **Force rerun** cached steps when needed:
 
     ```bash

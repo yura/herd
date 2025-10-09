@@ -4,6 +4,8 @@ require "optparse"
 require "json"
 require "yaml"
 
+require "herd/report_writer"
+
 module Herd
   # Minimal CLI for configuring Herd runtime options.
   class CLI
@@ -146,6 +148,8 @@ module Herd
         context: {},
         params_files: [],
         concurrency: nil,
+        report_summary: nil,
+        report_json: nil,
         force: ENV["HERD_FORCE"] == "1"
       }
 
@@ -178,6 +182,12 @@ module Herd
         puts "Host #{host}: #{result.success? ? "success" : "fail"}"
       end
 
+      Herd::ReportWriter.write(
+        recipe.report,
+        summary_path: command_options[:report_summary],
+        json_path: command_options[:report_json]
+      )
+
       state_store&.close if state_store.respond_to?(:close)
     end
 
@@ -201,6 +211,14 @@ module Herd
 
         opts.on("--params-file PATH", "Load runtime parameters from JSON or YAML file") do |path|
           command_options[:params_files] << path
+        end
+
+        opts.on("--report-summary PATH", "Write summary report to PATH") do |path|
+          command_options[:report_summary] = path
+        end
+
+        opts.on("--report-json PATH", "Write JSON report to PATH") do |path|
+          command_options[:report_json] = path
         end
 
         opts.on("--concurrency N", Integer, "Run up to N tasks in parallel") do |value|

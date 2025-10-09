@@ -2,6 +2,7 @@
 
 ## Change Log
 - 2025-10-09: Set up TODO.md to track Herd evolution; captured reporting requirements (including exception metadata) and high-level goals addressing Ansible pain points.
+- 2025-10-10: Added filesystem report exports (summary + JSON), wired ReportWriter through DSL/CLI, and documented the workflow in README.
 
 ## TODO
 - [x] Core: keep persistent SSH sessions per host and reuse them during task execution.
@@ -36,8 +37,9 @@
 - 2025-10-09: Delivered Herd::DSL builder for reusable task recipes with signature params support.
 - 2025-10-09: Implemented `herd run` CLI command with recipe execution and per-host summaries.
 - 2025-10-09: Added TaskGraph concurrency (level-based worker pool) and CLI support for params files/host lists.
+- 2025-10-10: Introduced `Herd::ReportWriter`, extended DSL/CLI to emit summary & JSON files, updated specs, and refreshed README documentation (rspec + rubocop clean).
 
 ## Next Session Prep
-- Extend CLI to accept parameter files (`--params-file`) and multiple hosts per command.
-- Expand documentation with a full recipe walkthrough (multi-host execution, cache usage, CLI flags).
-- Prototype concurrency options (thread pool vs async) aligned with TaskGraph execution.
+- Harden ReportWriter with error handling and add integration specs for CLI exports.
+- Design timeout/retry controls for TaskGraph and surface them via CLI flags.
+- Investigate cancellation strategies for concurrent execution (propagate failures gracefully).

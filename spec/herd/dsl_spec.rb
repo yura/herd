@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require "herd"
+require "json"
+require "tmpdir"
 
 RSpec.describe Herd::DSL do
   around do |example|
@@ -12,27 +14,39 @@ RSpec.describe Herd::DSL do
   end
 
   it "builds a task graph recipe with defaults" do
-    recipe = described_class.define do
-      defaults version: "v1"
+    Dir.mktmpdir do |dir|
+      summary_path = File.join(dir, "summary.txt")
+      json_path = File.join(dir, "report.json")
 
-      task "install" do |ctx|
-        ctx[:executed] << :install
-        Herd::ExecutionResult.new(value: "install", stdout: "install\n", stderr: "")
+      recipe = described_class.define do
+        defaults version: "v1"
+
+        task "install" do |ctx|
+          ctx[:executed] << :install
+          Herd::ExecutionResult.new(value: "install", stdout: "install\n", stderr: "")
+        end
+
+        task "configure",
+             depends_on: ["install"],
+             signature_params: ->(ctx, params) { { version: params[:version], hash: ctx[:hash] } } do |ctx|
+          ctx[:executed] << :configure
+          Herd::ExecutionResult.new(value: "configure", stdout: "configure\n", stderr: "")
+        end
       end
 
-      task "configure",
-           depends_on: ["install"],
-           signature_params: ->(ctx, params) { { version: params[:version], hash: ctx[:hash] } } do |ctx|
-        ctx[:executed] << :configure
-        Herd::ExecutionResult.new(value: "configure", stdout: "configure\n", stderr: "")
-      end
+      context = { executed: [], hash: "abc" }
+      result = recipe.run(
+        host: "alpha",
+        context: context,
+        summary_path: summary_path,
+        json_path: json_path
+      )
+
+      expect(context[:executed]).to eq(%i[install configure])
+      expect(result.success?).to be(true)
+      expect(File.read(summary_path)).to include("configure@alpha")
+      expect(JSON.parse(File.read(json_path))["events"].size).to eq(2)
     end
-
-    context = { executed: [], hash: "abc" }
-    result = recipe.run(host: "alpha", context: context)
-
-    expect(context[:executed]).to eq(%i[install configure])
-    expect(result.success?).to be(true)
   end
 
   it "respects state store across runs" do

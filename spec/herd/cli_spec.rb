@@ -3,6 +3,7 @@
 require "herd"
 require "herd/cli"
 require "tmpdir"
+require "json"
 
 RSpec.describe Herd::CLI do
   around do |example|
@@ -65,6 +66,12 @@ RSpec.describe Herd::CLI do
 
   it "loads params from file and supports multiple hosts" do
     Dir.mktmpdir do |dir|
+      params_path = File.join(dir, "params.yml")
+      File.write(params_path, "message: from_file\n")
+
+      summary_path = File.join(dir, "summary.txt")
+      json_path = File.join(dir, "report.json")
+
       recipe_path = File.join(dir, "recipe.rb")
       File.write(recipe_path, <<~RUBY)
         Herd::DSL.define do
@@ -78,9 +85,6 @@ RSpec.describe Herd::CLI do
         end
       RUBY
 
-      params_path = File.join(dir, "params.yml")
-      File.write(params_path, "message: from_file\n")
-
       cli = described_class.new([
                                   "run",
                                   recipe_path,
@@ -88,7 +92,9 @@ RSpec.describe Herd::CLI do
                                   "--concurrency", "2",
                                   "--params-file", params_path,
                                   "--param", "message=override",
-                                  "--context", "dir=#{dir}"
+                                  "--context", "dir=#{dir}",
+                                  "--report-summary", summary_path,
+                                  "--report-json", json_path
                                 ])
 
       expect { cli.run! }.to output(/Host alpha: success.*Host beta: success/m).to_stdout
@@ -96,6 +102,10 @@ RSpec.describe Herd::CLI do
       %w[alpha beta].each do |host|
         expect(File.read(File.join(dir, "#{host}.txt"))).to eq("override")
       end
+
+      expect(File.read(summary_path)).to include("write@alpha")
+      data = JSON.parse(File.read(json_path))
+      expect(data["events"].size).to be >= 2
     end
   end
 end

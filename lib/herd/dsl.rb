@@ -44,7 +44,17 @@ module Herd
         @report = report
       end
 
-      def run(host:, params: {}, context: {}, force: false, state_store: nil, signature_builder: nil, concurrency: nil)
+      def run(host:, params: {}, context: {}, force: false, **options)
+        allowed = %i[state_store signature_builder concurrency summary_path json_path]
+        unknown = options.keys - allowed
+        raise ArgumentError, "Unknown options: #{unknown.join(", ")}" if unknown.any?
+
+        state_store = options[:state_store]
+        signature_builder = options[:signature_builder]
+        concurrency = options[:concurrency]
+        summary_path = options[:summary_path]
+        json_path = options[:json_path]
+
         graph = Herd::TaskGraph.new(
           report: report,
           state_store: state_store,
@@ -56,7 +66,9 @@ module Herd
         end
 
         merged_params = defaults.merge(params)
-        graph.run(host: host, context: context, params: merged_params, force: force, concurrency: concurrency)
+        result = graph.run(host: host, context: context, params: merged_params, force: force, concurrency: concurrency)
+        Herd::ReportWriter.write(report, summary_path: summary_path, json_path: json_path)
+        result
       end
     end
 
