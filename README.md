@@ -2,12 +2,6 @@
 
 Fast host configuration tool.
 
-## TODO
-
-* [ ] Commands with arguments
-* [ ] Reading and writing files
-* [ ] Run with `sudo`
-
 ## Installation
 
 TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
@@ -119,6 +113,75 @@ recipe.run(host: "alpha", context: context)
 ```
 
 The DSL merges `defaults` with runtime `params` and passes both into the signature builder so cache entries stay consistent.
+
+## Recipe workflow & CLI
+
+1. **Describe a recipe** (e.g. `deploy.rb`):
+
+    ```ruby
+    Herd::DSL.define do
+      defaults version: "2025.10"
+
+      task "install" do |ctx|
+        Herd::ExecutionResult.new(value: "packages", stdout: "install #{ctx[:host]}\n", stderr: "")
+      end
+
+      task "configure",
+           depends_on: ["install"],
+           signature_params: ->(ctx, params) { { version: params[:version], hash: ctx[:config_hash] } } do |ctx|
+        config_path = File.join(ctx[:dir], "#{ctx[:host]}.conf")
+        File.write(config_path, "version=#{params[:version]}\nhost=#{ctx[:host]}\n")
+        Herd::ExecutionResult.new(value: config_path, stdout: "configure #{ctx[:host]}\n", stderr: "")
+      end
+    end
+    ```
+
+2. **Prepare runtime parameters** (optional `params.yml`):
+
+    ```yaml
+    version: 2025.10.1
+    dir: tmp/output
+    config_hash: abc123
+    ```
+
+3. **Run the recipe via CLI**:
+
+    ```bash
+    bin/herd \
+      --state-store sqlite \
+      --state-path tmp/herd-state.sqlite3 \
+      run deploy.rb \
+      --params-file params.yml \
+      --param release=hotfix \
+      --host alpha,beta \
+      --host gamma
+    ```
+
+    Output example:
+
+    ```text
+    Tasks: 2 total | success: 2 | failed: 0 | running: 0 | skipped: 0
+    Total runtime: 0.012s
+     - install@alpha [success] (0.003s)
+     - configure@alpha [success] (0.004s)
+     - install@beta [success] (0.002s)
+     - configure@beta [success] (0.003s)
+     - install@gamma [success] (0.002s)
+     - configure@gamma [success] (0.002s)
+    Host alpha: success
+    Host beta: success
+    Host gamma: success
+    ```
+
+    Each host inherits `params` and `context`; repeatable `--host` flags or comma-separated lists are supported. Local context receives the resolved `:host`, while `:params` contains merged defaults, files and CLI overrides.
+
+4. **Force rerun** cached steps when needed:
+
+    ```bash
+    bin/herd run deploy.rb --force --host alpha
+    ```
+
+    The `--force` flag (or `HERD_FORCE=1`) bypasses stored results for the selected hosts/signatures.
 
 ## Contributing
 
