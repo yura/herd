@@ -52,11 +52,11 @@ RSpec.describe Herd::CLI do
       RUBY
 
       cli = described_class.new([
-        "run",
-        recipe_path,
-        "--host", "alpha",
-        "--context", "flag=#{flag_path}"
-      ])
+                                  "run",
+                                  recipe_path,
+                                  "--host", "alpha",
+                                  "--context", "flag=#{flag_path}"
+                                ])
 
       expect { cli.run! }.to output(/Host alpha: success/).to_stdout
       expect(File.read(flag_path)).to eq("ok")

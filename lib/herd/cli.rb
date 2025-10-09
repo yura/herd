@@ -26,13 +26,9 @@ module Herd
       parse!
 
       Herd.configure do |config|
-        if options[:state_store]
-          config.state_store_adapter = options[:state_store]
-        end
+        config.state_store_adapter = options[:state_store] if options[:state_store]
 
-        if options[:state_path]
-          config.state_store_path = options[:state_path]
-        end
+        config.state_store_path = options[:state_path] if options[:state_path]
       end
 
       options
@@ -120,21 +116,22 @@ module Herd
     end
 
     def normalize_options
-      if options[:state_store]
-        options[:state_store] = normalize_store(options[:state_store])
-      end
+      return unless options[:state_store]
+
+      options[:state_store] = normalize_store(options[:state_store])
     end
 
     def normalize_store(store)
-      case store
-      when nil
-        nil
-      when "sqlite", :sqlite
+      return nil if store.nil?
+
+      normalized = store.to_s
+      return nil if normalized == "none"
+
+      case normalized
+      when "sqlite"
         :sqlite
-      when "memory", :memory
+      when "memory"
         :memory
-      when "none", :none
-        nil
       else
         raise OptionParser::InvalidArgument, "Unknown state store '#{store}'"
       end
@@ -169,7 +166,7 @@ module Herd
 
       puts recipe.report.summary
       results.each do |host, result|
-        puts "Host #{host}: #{result.success? ? 'success' : 'fail'}"
+        puts "Host #{host}: #{result.success? ? "success" : "fail"}"
       end
 
       state_store&.close if state_store.respond_to?(:close)
@@ -202,7 +199,6 @@ module Herd
       raise ArgumentError, "Recipe path required" unless path
 
       parser.order!(args)
-      raise ArgumentError, "Recipe path required" unless path
 
       path
     end
@@ -215,12 +211,7 @@ module Herd
     end
 
     def load_recipe(path)
-      code = File.read(path)
-      recipe = Kernel.eval(code, TOPLEVEL_BINDING, path)
-      unless recipe.is_a?(Herd::DSL::Recipe)
-        raise ArgumentError, "Recipe #{path} must return Herd::DSL::Recipe"
-      end
-      recipe
+      Herd::DSL.load_file(path)
     end
 
     def shift_required(flag)

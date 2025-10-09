@@ -57,4 +57,3 @@ RSpec.describe Herd::TaskGraph do
     end
   end
 end
-

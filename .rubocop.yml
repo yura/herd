@@ -3,7 +3,49 @@ plugins:
   - rubocop-rspec
 
 AllCops:
-  TargetRubyVersion: 3.2
+  TargetRubyVersion: 3.4
+  NewCops: enable
+
+RSpec/MultipleExpectations:
+  Enabled: false
+
+RSpec/ExampleLength:
+  Max: 40
+
+RSpec/MultipleDescribes:
+  Enabled: false
+
+Layout/LineLength:
+  Max: 140
+
+Metrics/ClassLength:
+  Max: 260
+
+Metrics/MethodLength:
+  Max: 80
+
+Metrics/AbcSize:
+  Max: 60
+
+Metrics/CyclomaticComplexity:
+  Max: 15
+
+Metrics/BlockLength:
+  Max: 80
+  Exclude:
+    - spec/**/*
+
+Metrics/ParameterLists:
+  Max: 6
+
+Style/Documentation:
+  Enabled: false
+
+Security/MarshalLoad:
+  Enabled: false
+
+Gemspec/DevelopmentDependencies:
+  Enabled: false
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes

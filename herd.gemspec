@@ -9,14 +9,18 @@ Gem::Specification.new do |spec|
   spec.email = ["yury.kotlyarov@gmail.com"]
 
   spec.summary = "Fast host configuration tool"
-  spec.description = "Simple ruby DSL for fast host configuration. Supports Ubuntu and requires SSH server running on each targets host."
+  spec.description = <<~DESC.strip
+    Simple ruby DSL for fast host configuration. Supports Ubuntu and
+    requires SSH server running on each targets host.
+  DESC
   spec.homepage = "https://github.com/yura/herd"
   spec.license = "MIT"
-  spec.required_ruby_version = ">= 3.2.0"
+  spec.required_ruby_version = ">= 3.4.0"
 
   spec.metadata["allowed_push_host"] = "https://rubygems.org"
   spec.metadata["homepage_uri"] = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/yura/herd"
+  spec.metadata["rubygems_mfa_required"] = "true"
   # spec.metadata["changelog_uri"] = "TODO: Put your gem's CHANGELOG.md URL here."
 
   # Specify which files should be added to the gem when it is released.

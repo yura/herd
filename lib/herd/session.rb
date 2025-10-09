@@ -14,13 +14,13 @@ module Herd
     end
 
     # Runs a direct command or evaluates a block within the session.
-    def execute(command = nil, &block)
+    def execute(command = nil, &)
       reset_buffers
       value = nil
 
       begin
         value = run(command) if command
-        value = instance_exec(&block) if block_given?
+        value = instance_exec(&) if block_given?
         store_result(value)
       rescue StandardError => e
         store_result(value)

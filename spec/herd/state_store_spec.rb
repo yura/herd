@@ -5,12 +5,15 @@ require "tmpdir"
 require "fileutils"
 
 RSpec.shared_examples "state store adapter" do
+  subject(:store) { build_store.call(clock) }
+
   let(:clock) do
     time = 0
-    -> { time += 1; Time.at(time) }
+    lambda {
+      time += 1
+      Time.at(time)
+    }
   end
-
-  subject(:store) { build_store.call(clock) }
 
   after do
     store.close if store.respond_to?(:close)

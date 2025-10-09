@@ -60,7 +60,9 @@ module Herd
           reason = build_skip_reason(task, results)
           event = start_event(task, host)
           report&.task_skipped(event: event, reason: reason)
-          results[task_name] = TaskResult.new(name: task_name, status: :skipped, value: nil, stdout: nil, stderr: nil, error: nil, skip_reason: reason)
+          results[task_name] =
+            TaskResult.new(name: task_name, status: :skipped, value: nil, stdout: nil, stderr: nil, error: nil,
+                           skip_reason: reason)
           next
         end
 
@@ -95,10 +97,10 @@ module Herd
             error: nil,
             skip_reason: nil
           )
-        rescue StandardError => exception
+        rescue StandardError => e
           report&.task_failed(
             event: event,
-            exception: exception,
+            exception: e,
             stdout: normalized[:stdout],
             stderr: normalized[:stderr]
           )
@@ -109,7 +111,7 @@ module Herd
             value: normalized[:value],
             stdout: normalized[:stdout],
             stderr: normalized[:stderr],
-            error: exception,
+            error: e,
             skip_reason: nil
           )
         end
@@ -127,7 +129,7 @@ module Herd
         missing = task.depends_on.reject { |dependency| tasks.key?(dependency) }
         next if missing.empty?
 
-        raise ArgumentError, "undefined dependencies for #{task.name}: #{missing.join(', ')}"
+        raise ArgumentError, "undefined dependencies for #{task.name}: #{missing.join(", ")}"
       end
     end
 
@@ -241,7 +243,7 @@ module Herd
 
       return "dependencies not satisfied" if failed_dependencies.empty?
 
-      "dependencies not satisfied: #{failed_dependencies.join(', ')}"
+      "dependencies not satisfied: #{failed_dependencies.join(", ")}"
     end
 
     def start_event(task, host)

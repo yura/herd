@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "json"
-require "thread"
 require "time"
 
 module Herd
@@ -39,7 +38,8 @@ module Herd
         backtrace: exception.backtrace
       }
 
-      finalize_event(event, status: :failed, stdout: stdout, stderr: stderr, exception: exception_payload, skip_reason: nil)
+      finalize_event(event, status: :failed, stdout: stdout, stderr: stderr, exception: exception_payload,
+                            skip_reason: nil)
     end
 
     # Marks the task as skipped with an optional reason.
@@ -80,8 +80,8 @@ module Herd
     end
 
     # JSON export of the report.
-    def to_json(*args)
-      to_h.to_json(*args)
+    def to_json(*)
+      to_h.to_json(*)
     end
 
     private
@@ -125,8 +125,8 @@ module Herd
     end
 
     # Serializes access to the shared event store.
-    def synchronize(&block)
-      @mutex.synchronize(&block)
+    def synchronize(&)
+      @mutex.synchronize(&)
     end
 
     def aggregate_counts
@@ -160,10 +160,20 @@ module Herd
 
     def format_event_line(event)
       duration = event[:duration] ? format("%.3fs", event[:duration]) : "-"
-      line = format(" - %s@%s [%s] (%s)", event[:task], event[:host], event[:status], duration)
+      line = format(
+        " - %<task>s@%<host>s [%<status>s] (%<duration>s)",
+        task: event[:task],
+        host: event[:host],
+        status: event[:status],
+        duration: duration
+      )
 
       if event[:exception]
-        line += format(" %s: %s", event[:exception][:class], event[:exception][:message])
+        line += format(
+          " %<class>s: %<message>s",
+          class: event[:exception][:class],
+          message: event[:exception][:message]
+        )
       elsif event[:status] == :skipped && event[:skip_reason]
         line += format(" reason: %s", event[:skip_reason])
       end

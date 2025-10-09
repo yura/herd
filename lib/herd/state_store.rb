@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require "thread"
 require "sequel"
 
 module Herd
@@ -45,8 +44,8 @@ module Herd
 
       attr_reader :clock
 
-      def synchronize(&block)
-        @mutex.synchronize(&block)
+      def synchronize(&)
+        @mutex.synchronize(&)
       end
 
       def key(host, task, signature)
@@ -54,7 +53,7 @@ module Herd
       end
 
       def key_prefix(host, task)
-        [host, task].join(":") + ":"
+        "#{[host, task].join(":")}:"
       end
     end
 
@@ -92,7 +91,9 @@ module Herd
           updated_at: timestamp
         }
 
-        dataset.insert_conflict(target: %i[host task signature], update: payload.reject { |key, _| %i[host task signature].include?(key) }).insert(payload)
+        dataset.insert_conflict(target: %i[host task signature],
+                                update: payload.except(:host, :task,
+                                                       :signature)).insert(payload)
 
         fetch(host: host, task: task, signature: signature)
       end

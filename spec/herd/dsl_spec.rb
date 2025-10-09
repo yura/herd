@@ -55,4 +55,3 @@ RSpec.describe Herd::DSL do
     expect(context[:runs]).to eq(1)
   end
 end
-

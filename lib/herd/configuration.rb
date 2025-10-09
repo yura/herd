@@ -35,7 +35,7 @@ module Herd
     end
 
     def ensure_directory(path)
-      FileUtils.mkdir_p(path) unless Dir.exist?(path)
+      FileUtils.mkdir_p(path)
     end
   end
 end

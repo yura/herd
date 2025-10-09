@@ -16,14 +16,14 @@ RSpec.describe Herd::Runner do
       before do
         allow(first_host).to receive(:exec).with("hostname").and_return("alpha001")
         allow(second_host).to receive(:exec).with("hostname").and_return("alpha002")
-        allow(first_host).to receive(:host).and_return("first.example")
-        allow(second_host).to receive(:host).and_return("second.example")
-        allow(first_host).to receive(:last_execution).and_return(
-          Herd::ExecutionResult.new(value: "alpha001", stdout: "alpha001", stderr: "")
-        )
-        allow(second_host).to receive(:last_execution).and_return(
-          Herd::ExecutionResult.new(value: "alpha002", stdout: "alpha002", stderr: "")
-        )
+        allow(first_host).to receive_messages(host: "first.example",
+                                              last_execution: Herd::ExecutionResult.new(
+                                                value: "alpha001", stdout: "alpha001", stderr: ""
+                                              ))
+        allow(second_host).to receive_messages(host: "second.example",
+                                               last_execution: Herd::ExecutionResult.new(
+                                                 value: "alpha002", stdout: "alpha002", stderr: ""
+                                               ))
       end
 
       it "runs the command in parallel on all hosts" do
@@ -58,14 +58,14 @@ RSpec.describe Herd::Runner do
       before do
         allow(first_host).to receive(:exec).with(nil).and_return("alpha001")
         allow(second_host).to receive(:exec).with(nil).and_return("alpha002")
-        allow(first_host).to receive(:host).and_return("first.example")
-        allow(second_host).to receive(:host).and_return("second.example")
-        allow(first_host).to receive(:last_execution).and_return(
-          Herd::ExecutionResult.new(value: "alpha001", stdout: "alpha001", stderr: "")
-        )
-        allow(second_host).to receive(:last_execution).and_return(
-          Herd::ExecutionResult.new(value: "alpha002", stdout: "alpha002", stderr: "")
-        )
+        allow(first_host).to receive_messages(host: "first.example",
+                                              last_execution: Herd::ExecutionResult.new(
+                                                value: "alpha001", stdout: "alpha001", stderr: ""
+                                              ))
+        allow(second_host).to receive_messages(host: "second.example",
+                                               last_execution: Herd::ExecutionResult.new(
+                                                 value: "alpha002", stdout: "alpha002", stderr: ""
+                                               ))
       end
 
       it "runs the command in parallel on all hosts" do

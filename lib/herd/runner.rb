@@ -29,18 +29,19 @@ module Herd
 
       result = host.exec(command, &block)
       execution = host.last_execution
-      report&.task_succeeded(event: event, stdout: execution_stdout(execution), stderr: execution_stderr(execution)) if event
+      if event
+        report&.task_succeeded(event: event, stdout: execution_stdout(execution),
+                               stderr: execution_stderr(execution))
+      end
       result
     rescue StandardError => e
       execution = host.last_execution
-      if report
-        report.task_failed(
-          event: event || start_event(report, host, task, command),
-          exception: e,
-          stdout: execution_stdout(execution),
-          stderr: execution_stderr(execution)
-        )
-      end
+      report&.task_failed(
+        event: event || start_event(report, host, task, command),
+        exception: e,
+        stdout: execution_stdout(execution),
+        stderr: execution_stderr(execution)
+      )
       raise
     end
 

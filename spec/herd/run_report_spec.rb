@@ -142,7 +142,7 @@ RSpec.describe Herd::RunReport do
       data = JSON.parse(report.to_json)
 
       expect(data["totals"]).to include("total" => 1, "success" => 1)
-      expect(data["duration"]).to eq((mid_time - start_time))
+      expect(data["duration"]).to eq(mid_time - start_time)
 
       serialized_event = data["events"].first
       expect(serialized_event).to include(

@@ -60,12 +60,23 @@ module Herd
       end
     end
 
+    Loader = Module.new do
+      extend Herd::DSL
+    end
+
     module_function
 
-    def define(&block)
+    def define(&)
       builder = Builder.new
-      builder.instance_exec(&block)
+      builder.instance_exec(&)
       builder.build
+    end
+
+    def load_file(path)
+      recipe = Loader.module_eval(File.read(path), path)
+      raise ArgumentError, "Recipe #{path} must return Herd::DSL::Recipe" unless recipe.is_a?(Herd::DSL::Recipe)
+
+      recipe
     end
   end
 end

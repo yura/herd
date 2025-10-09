@@ -28,7 +28,8 @@ RSpec.describe Herd::TaskGraph do
   it "uses cache hits to skip execution" do
     builder = graph.send(:signature_builder)
     install_signature = builder.call("install", { version: "v1" })
-    entry = Herd::StateStore::Entry.new(status: :success, stdout: "install\n", stderr: "", value: "install", schema_version: 1)
+    entry = Herd::StateStore::Entry.new(status: :success, stdout: "install\n", stderr: "", value: "install",
+                                        schema_version: 1)
     store.write(host: "alpha", task: "install", signature: install_signature, entry: entry)
 
     context = { config_hash: "abc" }
@@ -45,7 +46,8 @@ RSpec.describe Herd::TaskGraph do
   it "forces re-execution when --force is true" do
     builder = graph.send(:signature_builder)
     install_signature = builder.call("install", { version: "v1" })
-    entry = Herd::StateStore::Entry.new(status: :success, stdout: "install\n", stderr: "", value: "install", schema_version: 1)
+    entry = Herd::StateStore::Entry.new(status: :success, stdout: "install\n", stderr: "", value: "install",
+                                        schema_version: 1)
     store.write(host: "alpha", task: "install", signature: install_signature, entry: entry)
 
     graph.run(host: "alpha", context: { config_hash: "abc" }, params: { version: "v1" }, force: true)

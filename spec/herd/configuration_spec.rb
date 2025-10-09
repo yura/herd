@@ -6,7 +6,7 @@ require "tmpdir"
 RSpec.describe Herd::Configuration do
   around do |example|
     original = Herd.configuration
-    Herd.instance_variable_set(:@configuration, Herd::Configuration.new)
+    Herd.instance_variable_set(:@configuration, described_class.new)
     example.run
   ensure
     Herd.instance_variable_set(:@configuration, original)

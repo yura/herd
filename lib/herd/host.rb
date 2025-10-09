@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require "net/ssh"
-require "thread"
 
 module Herd
   # Target host maintaining a persistent SSH session.
@@ -26,10 +25,10 @@ module Herd
     end
 
     # Executes a command or block within a persistent SSH session.
-    def exec(command = nil, &block)
+    def exec(command = nil, &)
       session = ensure_session
 
-      execute_with_session(session, command, &block)
+      execute_with_session(session, command, &)
     rescue StandardError => e
       @last_execution = session.last_result
       reset_session(clear_last: false)
@@ -57,9 +56,9 @@ module Herd
     end
 
     # Executes the command while serializing access per host.
-    def execute_with_session(session, command, &block)
+    def execute_with_session(session, command, &)
       @exec_mutex.synchronize do
-        result = session.execute(command, &block)
+        result = session.execute(command, &)
         @last_execution = result
         result.value
       end
