@@ -44,7 +44,7 @@ module Herd
         @report = report
       end
 
-      def run(host:, params: {}, context: {}, force: false, state_store: nil, signature_builder: nil)
+      def run(host:, params: {}, context: {}, force: false, state_store: nil, signature_builder: nil, concurrency: nil)
         graph = Herd::TaskGraph.new(
           report: report,
           state_store: state_store,
@@ -56,7 +56,7 @@ module Herd
         end
 
         merged_params = defaults.merge(params)
-        graph.run(host: host, context: context, params: merged_params, force: force)
+        graph.run(host: host, context: context, params: merged_params, force: force, concurrency: concurrency)
       end
     end
 

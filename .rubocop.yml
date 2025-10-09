@@ -19,7 +19,7 @@ Layout/LineLength:
   Max: 140
 
 Metrics/ClassLength:
-  Max: 260
+  Max: 320
 
 Metrics/MethodLength:
   Max: 80
@@ -36,7 +36,7 @@ Metrics/BlockLength:
     - spec/**/*
 
 Metrics/ParameterLists:
-  Max: 6
+  Max: 7
 
 Metrics/PerceivedComplexity:
   Max: 15

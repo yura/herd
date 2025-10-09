@@ -47,75 +47,17 @@ module Herd
       tasks[string_name] = Task.new(name: string_name, depends_on: dependencies, action: block, options: options)
     end
 
-    def run(host:, context: nil, params: {}, force: false)
+    def run(host:, context: nil, params: {}, force: false, concurrency: nil)
+      concurrency = resolve_concurrency(concurrency)
+      context ||= {}
       validate_dependencies!
 
-      results = {}
-
-      topological_order.each do |task_name|
-        task = tasks.fetch(task_name)
-        signature = build_signature(task, params, context)
-
-        if dependency_unsatisfied?(task, results)
-          reason = build_skip_reason(task, results)
-          event = start_event(task, host)
-          report&.task_skipped(event: event, reason: reason)
-          results[task_name] =
-            TaskResult.new(name: task_name, status: :skipped, value: nil, stdout: nil, stderr: nil, error: nil,
-                           skip_reason: reason)
-          next
+      results =
+        if concurrency > 1
+          run_parallel(host: host, context: context, params: params, force: force, concurrency: concurrency)
+        else
+          run_sequential(host: host, context: context, params: params, force: force)
         end
-
-        cached_result = fetch_cached_result(task, host, signature, force: force)
-        if cached_result
-          results[task_name] = cached_result
-          next
-        end
-
-        event = start_event(task, host)
-        normalized = { value: nil, stdout: nil, stderr: nil }
-
-        begin
-          raw_result = task.action.call(context)
-          normalized = normalize_result(raw_result)
-          report&.task_succeeded(event: event, stdout: normalized[:stdout], stderr: normalized[:stderr])
-          entry = Herd::StateStore::Entry.new(
-            status: :success,
-            stdout: normalized[:stdout],
-            stderr: normalized[:stderr],
-            value: normalized[:value],
-            schema_version: schema_version(task)
-          )
-          write_cache(task, host, signature, entry)
-
-          results[task_name] = TaskResult.new(
-            name: task_name,
-            status: :success,
-            value: normalized[:value],
-            stdout: normalized[:stdout],
-            stderr: normalized[:stderr],
-            error: nil,
-            skip_reason: nil
-          )
-        rescue StandardError => e
-          report&.task_failed(
-            event: event,
-            exception: e,
-            stdout: normalized[:stdout],
-            stderr: normalized[:stderr]
-          )
-
-          results[task_name] = TaskResult.new(
-            name: task_name,
-            status: :failed,
-            value: normalized[:value],
-            stdout: normalized[:stdout],
-            stderr: normalized[:stderr],
-            error: e,
-            skip_reason: nil
-          )
-        end
-      end
 
       RunResult.new(results)
     end
@@ -123,6 +65,187 @@ module Herd
     private
 
     attr_reader :report, :state_store, :signature_builder, :tasks
+
+    def resolve_concurrency(value)
+      configured = Herd.configuration.concurrency
+      resolved = value || configured
+      resolved = resolved.to_i if resolved
+      resolved&.positive? ? resolved : 1
+    end
+
+    def run_sequential(host:, context:, params:, force: false)
+      ctx = prepare_context_object(context, host, params)
+      results = {}
+
+      topological_order.each do |task_name|
+        task = tasks.fetch(task_name)
+        results[task_name] = execute_task(task, host, ctx, params, force, results)
+      end
+
+      results
+    end
+
+    def run_parallel(host:, context:, params:, force:, concurrency:)
+      ctx = prepare_context_object(context, host, params)
+      results = {}
+      processed = []
+
+      ready = tasks.keys.select { |name| tasks[name].depends_on.empty? }
+
+      until ready.empty?
+        level_results = process_level(ready, host, ctx, params, force, concurrency, results)
+        results.merge!(level_results)
+        processed.concat(ready)
+        remaining = tasks.keys - processed
+        ready = remaining.select do |name|
+          tasks[name].depends_on.all? { |dependency| results.key?(dependency) }
+        end
+      end
+
+      (tasks.keys - processed).each do |name|
+        next if results.key?(name)
+
+        task = tasks[name]
+        reason = build_skip_reason(task, results)
+        event = start_event(task, host)
+        report&.task_skipped(event: event, reason: reason)
+        results[name] = TaskResult.new(
+          name: name,
+          status: :skipped,
+          value: nil,
+          stdout: nil,
+          stderr: nil,
+          error: nil,
+          skip_reason: reason
+        )
+      end
+
+      results
+    end
+
+    def process_level(task_names, host, context, params, force, concurrency, existing_results)
+      return {} if task_names.empty?
+
+      work_queue = Queue.new
+      task_names.each { |name| work_queue << name }
+      worker_count = [concurrency, task_names.size].min
+      worker_count.times { work_queue << nil }
+
+      level_results = {}
+      mutex = Mutex.new
+
+      workers = worker_count.times.map do
+        Thread.new do
+          loop do
+            name = work_queue.pop
+            break unless name
+
+            task = tasks.fetch(name)
+            result = execute_task(task, host, context, params, force, existing_results)
+            mutex.synchronize { level_results[name] = result }
+          end
+        end
+      end
+
+      workers.each(&:join)
+      level_results
+    end
+
+    def execute_task(task, host, context, params, force, results_snapshot)
+      reason = dependency_skip_reason(task, results_snapshot)
+      if reason
+        event = start_event(task, host)
+        report&.task_skipped(event: event, reason: reason)
+        return TaskResult.new(
+          name: task.name,
+          status: :skipped,
+          value: nil,
+          stdout: nil,
+          stderr: nil,
+          error: nil,
+          skip_reason: reason
+        )
+      end
+
+      signature = build_signature(task, params, context)
+      if (entry = fetch_cache_entry(task, host, signature, force: force))
+        event = start_event(task, host)
+        report&.task_skipped(event: event, reason: "cache hit")
+        return TaskResult.new(
+          name: task.name,
+          status: :cached,
+          value: entry.value,
+          stdout: entry.stdout,
+          stderr: entry.stderr,
+          error: nil,
+          skip_reason: "cache hit"
+        )
+      end
+
+      event = start_event(task, host)
+      normalized = { value: nil, stdout: nil, stderr: nil }
+
+      begin
+        raw_result = task.action.call(context)
+        normalized = normalize_result(raw_result)
+        report&.task_succeeded(event: event, stdout: normalized[:stdout], stderr: normalized[:stderr])
+        entry = Herd::StateStore::Entry.new(
+          status: :success,
+          stdout: normalized[:stdout],
+          stderr: normalized[:stderr],
+          value: normalized[:value],
+          schema_version: schema_version(task)
+        )
+        write_cache(task, host, signature, entry)
+
+        TaskResult.new(
+          name: task.name,
+          status: :success,
+          value: normalized[:value],
+          stdout: normalized[:stdout],
+          stderr: normalized[:stderr],
+          error: nil,
+          skip_reason: nil
+        )
+      rescue StandardError => e
+        report&.task_failed(
+          event: event,
+          exception: e,
+          stdout: normalized[:stdout],
+          stderr: normalized[:stderr]
+        )
+
+        TaskResult.new(
+          name: task.name,
+          status: :failed,
+          value: normalized[:value],
+          stdout: normalized[:stdout],
+          stderr: normalized[:stderr],
+          error: e,
+          skip_reason: nil
+        )
+      end
+    end
+
+    def dependency_skip_reason(task, results_snapshot)
+      return nil if task.depends_on.empty?
+
+      return nil unless task.depends_on.any? do |dependency|
+        dependency_result = results_snapshot[dependency]
+        dependency_result && !successful_status?(dependency_result.status)
+      end
+
+      build_skip_reason(task, results_snapshot)
+    end
+
+    def prepare_context_object(context, host, params)
+      ctx = context || {}
+      if ctx.is_a?(Hash)
+        ctx[:host] ||= host
+        ctx[:params] ||= params
+      end
+      ctx
+    end
 
     def validate_dependencies!
       tasks.each_value do |task|
@@ -164,26 +287,10 @@ module Herd
       end
     end
 
-    def fetch_cached_result(task, host, signature, force:)
+    def fetch_cache_entry(task, host, signature, force:)
       return nil unless state_store && signature
 
-      entry = state_store.fetch(host: host, task: task.name, signature: signature, force: force)
-      return nil unless entry
-
-      report&.task_skipped(
-        event: start_event(task, host),
-        reason: "cache hit"
-      )
-
-      TaskResult.new(
-        name: task.name,
-        status: :cached,
-        value: entry.value,
-        stdout: entry.stdout,
-        stderr: entry.stderr,
-        error: nil,
-        skip_reason: "cache hit"
-      )
+      state_store.fetch(host: host, task: task.name, signature: signature, force: force)
     end
 
     def write_cache(task, host, signature, entry)

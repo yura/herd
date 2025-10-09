@@ -61,6 +61,7 @@ Environment flags mirror the same behaviour:
 - `HERD_STATE_DB` — path to SQLite database (enables the adapter automatically).
 - `HERD_FORCE=1` — bypass cached results (same as CLI `--force`).
 - `HERD_STATE_STORE=memory|sqlite|none` — optional adapter override.
+- `HERD_CONCURRENCY=N` — default parallelism for task execution.
 
 The CLI (`bin/herd`) applies these settings before running recipes.
 
@@ -169,7 +170,8 @@ The DSL merges `defaults` with runtime `params` and passes both into the signatu
       --params-file params.yml \
       --param release=hotfix \
       --host alpha,beta \
-      --host gamma
+      --host gamma \
+      --concurrency 4
     ```
 
     Output example:

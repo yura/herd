@@ -145,6 +145,7 @@ module Herd
         params: {},
         context: {},
         params_files: [],
+        concurrency: nil,
         force: ENV["HERD_FORCE"] == "1"
       }
 
@@ -166,7 +167,8 @@ module Herd
           params: command_options[:params],
           context: context,
           force: command_options[:force],
-          state_store: state_store
+          state_store: state_store,
+          concurrency: command_options[:concurrency]
         )
         [host, result]
       end
@@ -199,6 +201,10 @@ module Herd
 
         opts.on("--params-file PATH", "Load runtime parameters from JSON or YAML file") do |path|
           command_options[:params_files] << path
+        end
+
+        opts.on("--concurrency N", Integer, "Run up to N tasks in parallel") do |value|
+          command_options[:concurrency] = value
         end
 
         opts.on("--force", "Force rerun tasks") do

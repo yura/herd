@@ -85,6 +85,7 @@ RSpec.describe Herd::CLI do
                                   "run",
                                   recipe_path,
                                   "--host", "alpha,beta",
+                                  "--concurrency", "2",
                                   "--params-file", params_path,
                                   "--param", "message=override",
                                   "--context", "dir=#{dir}"
