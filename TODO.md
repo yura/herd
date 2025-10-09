@@ -27,5 +27,6 @@
 - 2025-10-09: Introduced dependency-aware `TaskGraph` with skip propagation and reporting hooks.
 
 ## Next Session Prep
-- Sketch `StateStore` interface boundaries and identify required persistence metadata.
-- Decide on cache invalidation semantics and signature format for persisted task results.
+- Sketch `StateStore` interface boundaries (`fetch/write/invalidate`, transactions) and enumerate persisted fields (status, stdout, stderr, timestamps, schema version).
+- Decide on cache invalidation semantics, signature hashing inputs (task params, version), and handling of `--force` across hosts.
+- Draft RSpec examples for in-memory `StateStore` adapter covering cache hits, force miss, and dependency skips.
