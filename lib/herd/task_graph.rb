@@ -33,7 +33,7 @@ module Herd
     def initialize(report: nil, state_store: nil, signature_builder: nil)
       @report = report
       @signature_builder = signature_builder || default_signature_builder
-      @state_store = state_store || Herd.configuration.build_state_store
+      @state_store = state_store.nil? ? Herd.configuration.build_state_store : state_store
       @tasks = {}
     end
 

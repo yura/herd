@@ -9,6 +9,7 @@ require_relative "herd/session"
 require_relative "herd/run_report"
 require_relative "herd/state_store"
 require_relative "herd/task_graph"
+require_relative "herd/dsl"
 
 module Herd
   class CommandError < StandardError; end

@@ -95,6 +95,31 @@ end
 
 At runtime, pass `params:` and optionally `force: true` to `run` to invalidate cached entries for the current host/task signature.
 
+## DSL quick start
+
+Use the DSL helper to assemble a task graph with defaults and signature metadata:
+
+```ruby
+recipe = Herd::DSL.define do
+  defaults version: "v1"
+
+  task "install" do |_ctx|
+    Herd::ExecutionResult.new(value: "install", stdout: "install\n", stderr: "")
+  end
+
+  task "configure",
+       depends_on: ["install"],
+       signature_params: ->(ctx, params) { { version: params[:version], hash: ctx[:config_hash] } } do |ctx|
+    Herd::ExecutionResult.new(value: "configure", stdout: "configure\n", stderr: "")
+  end
+end
+
+context = { config_hash: "abc" }
+recipe.run(host: "alpha", context: context)
+```
+
+The DSL merges `defaults` with runtime `params` and passes both into the signature builder so cache entries stay consistent.
+
 ## Contributing
 
 Bug reports and pull requests are welcome on GitHub at https://github.com/yura/herd. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/yura/herd/blob/main/CODE_OF_CONDUCT.md).
