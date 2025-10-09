@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "herd"
+require "json"
 
 RSpec.describe Herd::RunReport do
   subject(:report) { described_class.new }
@@ -80,5 +81,50 @@ RSpec.describe Herd::RunReport do
       )
     end
   end
-end
 
+  describe "aggregations" do
+    let(:start_time) { Time.utc(2024, 1, 1, 12, 0, 0) }
+    let(:mid_time) { start_time + 5 }
+    let(:end_time) { start_time + 10 }
+    let(:clock_values) { [start_time, mid_time, start_time + 7, end_time] }
+    let(:report) { described_class.new(clock: -> { clock_values.shift }) }
+
+    it "renders a console summary" do
+      first = report.task_started(host: "alpha", task: "install", command: "install")
+      report.task_succeeded(event: first, stdout: "ok", stderr: "")
+
+      second = report.task_started(host: "beta", task: "clone", command: "clone")
+      report.task_failed(event: second, exception: RuntimeError.new("boom"), stdout: "", stderr: "boom")
+
+      summary = report.summary
+
+      expect(summary).to include("Tasks: 2 total")
+      expect(summary).to include("success: 1")
+      expect(summary).to include("failed: 1")
+      expect(summary).to include("install@alpha")
+      expect(summary).to include("clone@beta")
+      expect(summary).to include("RuntimeError")
+    end
+
+    it "serializes report as JSON" do
+      event = report.task_started(host: "alpha", task: "install", command: "install")
+      report.task_succeeded(event: event, stdout: "ok", stderr: "")
+
+      data = JSON.parse(report.to_json)
+
+      expect(data["totals"]).to include("total" => 1, "success" => 1)
+      expect(data["duration"]).to eq((mid_time - start_time))
+
+      serialized_event = data["events"].first
+      expect(serialized_event).to include(
+        "host" => "alpha",
+        "task" => "install",
+        "status" => "success",
+        "stdout" => "ok",
+        "stderr" => ""
+      )
+      expect(serialized_event["started_at"]).to eq(start_time.iso8601)
+      expect(serialized_event["finished_at"]).to eq(mid_time.iso8601)
+    end
+  end
+end

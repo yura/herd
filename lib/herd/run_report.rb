@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
+require "json"
 require "thread"
+require "time"
 
 module Herd
   # Collects lifecycle data for task execution runs.
@@ -38,6 +40,43 @@ module Herd
       }
 
       finalize_event(event, status: :failed, stdout: stdout, stderr: stderr, exception: exception_payload)
+    end
+
+    # Human readable summary string for the collected events.
+    def summary
+      counts = aggregate_counts
+      lines = []
+      lines << format(
+        "Tasks: %<total>d total | success: %<success>d | failed: %<failed>d | running: %<running>d | skipped: %<skipped>d",
+        counts
+      )
+
+      if counts[:total].positive?
+        total = total_duration
+        lines << format("Total runtime: %.3fs", total || 0.0)
+      end
+
+      ordered_events.each do |event|
+        lines << format_event_line(event)
+      end
+
+      lines.join("\n")
+    end
+
+    # Hash representation of the report useful for exporting.
+    def to_h
+      counts = aggregate_counts
+
+      {
+        totals: counts,
+        duration: total_duration,
+        events: ordered_events.map { |event| serialize_event(event) }
+      }
+    end
+
+    # JSON export of the report.
+    def to_json(*args)
+      to_h.to_json(*args)
     end
 
     private
@@ -81,6 +120,58 @@ module Herd
     # Serializes access to the shared event store.
     def synchronize(&block)
       @mutex.synchronize(&block)
+    end
+
+    def aggregate_counts
+      counts = Hash.new(0)
+
+      events.each do |event|
+        counts[event[:status]] += 1
+      end
+
+      counts[:success] ||= 0
+      counts[:failed] ||= 0
+      counts[:running] ||= 0
+      counts[:skipped] ||= 0
+      counts[:total] = events.count
+
+      counts
+    end
+
+    def total_duration
+      starts = events.filter_map { |event| event[:started_at] }
+      finishes = events.filter_map { |event| event[:finished_at] }
+
+      return nil if starts.empty? || finishes.empty?
+
+      finishes.max - starts.min
+    end
+
+    def ordered_events
+      events.sort_by { |event| event[:started_at] || Time.at(0) }
+    end
+
+    def format_event_line(event)
+      duration = event[:duration] ? format("%.3fs", event[:duration]) : "-"
+      line = format(" - %s@%s [%s] (%s)", event[:task], event[:host], event[:status], duration)
+
+      if event[:exception]
+        line += format(" %s: %s", event[:exception][:class], event[:exception][:message])
+      end
+
+      line
+    end
+
+    def serialize_event(event)
+      event.transform_keys(&:to_s).merge(
+        "started_at" => serialize_time(event[:started_at]),
+        "finished_at" => serialize_time(event[:finished_at]),
+        "duration" => event[:duration]
+      )
+    end
+
+    def serialize_time(value)
+      value&.iso8601
     end
   end
 end

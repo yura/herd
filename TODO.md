@@ -7,7 +7,7 @@
 - [x] Core: keep persistent SSH sessions per host and reuse them during task execution.
 - [ ] Core: design a task graph with explicit dependencies and skip downstream tasks after failures.
 - [x] Reporting: implement `RunReport` capturing start/success/fail, stdout/stderr, timing, exception class/message/backtrace, and task context.
-- [ ] Reporting: add a structured console summary plus export (e.g., JSON) for later inspection.
+- [x] Reporting: add a structured console summary plus export (e.g., JSON) for later inspection.
 - [ ] Persistence: define a `StateStore` interface and default SQLite backend (via `sequel`) for task caching.
 - [ ] Persistence: honor a `--force` flag to invalidate cached task results per host/task signature.
 - [ ] DSL: sketch a Ruby DSL for declaring hosts, tasks, and dependency graphs (support reusable modules).
@@ -23,6 +23,7 @@
 - 2025-10-09: Extended `Runner#exec` to emit `RunReport` events for success/failure across hosts and covered new behavior with specs.
 - 2025-10-09: Shifted `Host`/`Session` to persistent SSH connections with reconnection on failure, plus new specs for lifecycle management.
 - 2025-10-09: Added `ExecutionResult` plumbing so runner reports real stdout/stderr buffers and sessions keep last result (with error capture).
+- 2025-10-09: Implemented `RunReport` summaries and JSON export with aggregation specs.
 
 ## Next Session Prep
 - Draft the `RunReport` API (events, serialization hooks, failure enrichment).
