@@ -36,4 +36,30 @@ RSpec.describe Herd::CLI do
     cli = described_class.new(["--state-store", "foo"])
     expect { cli.parse! }.to raise_error(OptionParser::InvalidArgument)
   end
+
+  it "executes recipe via run command" do
+    Dir.mktmpdir do |dir|
+      recipe_path = File.join(dir, "recipe.rb")
+      flag_path = File.join(dir, "flag.txt")
+
+      File.write(recipe_path, <<~RUBY)
+        Herd::DSL.define do
+          task "touch" do |ctx|
+            File.write(ctx[:flag], "ok")
+            Herd::ExecutionResult.new(value: "ok", stdout: "ok\n", stderr: "")
+          end
+        end
+      RUBY
+
+      cli = described_class.new([
+        "run",
+        recipe_path,
+        "--host", "alpha",
+        "--context", "flag=#{flag_path}"
+      ])
+
+      expect { cli.run! }.to output(/Host alpha: success/).to_stdout
+      expect(File.read(flag_path)).to eq("ok")
+    end
+  end
 end
