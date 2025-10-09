@@ -12,7 +12,10 @@
 - [x] Persistence: build SQLite `StateStore` backend (via `sequel`) for durable caching.
 - [x] Persistence: honor a `--force` flag to invalidate cached task results per host/task signature.
 - [x] DSL: sketch a Ruby DSL for declaring hosts, tasks, and dependency graphs (support reusable modules).
-- [ ] Research: evaluate the concurrency model (thread pool vs async) once persistent sessions land.
+- [x] Research: evaluate the concurrency model (thread pool vs async) once persistent sessions land.
+- [ ] Execution: implement configurable timeouts/retries per task and propagate to CLI/DSL.
+- [ ] Execution: add graceful cancellation for parallel runs when a failure occurs.
+- [ ] Reporting: capture per-task concurrency diagnostics (queue wait time, worker id).
 - [ ] Meta: at each session start, reread `TODO.md` and append progress notes to the Dev Log before exiting.
 - [ ] Meta: practice TDD — write comprehensive tests for each change before implementing functionality.
 
@@ -32,6 +35,7 @@
 - 2025-10-09: Added CLI options for state store selection/path and documented caching workflow in README.
 - 2025-10-09: Delivered Herd::DSL builder for reusable task recipes with signature params support.
 - 2025-10-09: Implemented `herd run` CLI command with recipe execution and per-host summaries.
+- 2025-10-09: Added TaskGraph concurrency (level-based worker pool) and CLI support for params files/host lists.
 
 ## Next Session Prep
 - Extend CLI to accept parameter files (`--params-file`) and multiple hosts per command.
