@@ -17,6 +17,7 @@ gem "net-ssh", "~> 7.3"
 group :development, :test do
   gem "rspec", "~> 3.0"
   gem "rubocop", "~> 1.21"
+  gem "rubocop-performance", require: false
   gem "rubocop-rake"
   gem "rubocop-rspec"
 end
