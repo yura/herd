@@ -23,7 +23,7 @@ module Herd
 
     def method_missing(cmd, *args)
       command = cmd.to_s
-      command = "#{command} #{args.join(' ')}" if args
+      command = "#{command} #{args.join(" ")}" if args
 
       ssh.exec! command do |_, stream, data|
         raise ::Herd::CommandError, data if stream == :stderr
