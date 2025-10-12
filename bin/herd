@@ -1,0 +1,9 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+$LOAD_PATH.unshift(File.expand_path("../lib", __dir__))
+
+require "herd"
+require "herd/cli"
+
+exit(Herd::CLI.new(ARGV).run)
