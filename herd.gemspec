@@ -3,7 +3,7 @@
 require_relative "lib/herd/version"
 
 Gem::Specification.new do |spec|
-  spec.name = "herd"
+  spec.name = "herd-rb"
   spec.version = Herd::VERSION
   spec.authors = ["Yury Kotlyarov"]
   spec.email = ["yury.kotlyarov@gmail.com"]
