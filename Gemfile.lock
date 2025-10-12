@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    herd (0.1.0)
+    herd-rb (0.1.0)
 
 GEM
   remote: https://rubygems.org/
@@ -89,7 +89,7 @@ PLATFORMS
 DEPENDENCIES
   bcrypt_pbkdf (~> 1.1)
   ed25519 (~> 1.4)
-  herd!
+  herd-rb!
   irb
   net-ssh (~> 7.3)
   rake (~> 13.0)
