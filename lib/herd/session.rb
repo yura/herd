@@ -6,26 +6,45 @@ module Herd
     OS_COMMANDS = %i[cat chmod echo hostname touch].freeze
     CUSTOM_COMMANDS_DIR = File.expand_path("session/commands", __dir__)
 
-    attr_reader :ssh
+    attr_reader :ssh, :current_host
 
     def initialize(ssh)
       @ssh = ssh
+      reset_transcript
     end
 
     def method_missing(cmd, *args)
-      command_parts = [cmd.to_s]
-      command_parts.concat(args.map(&:to_s)) if args.any?
-      command = command_parts.join(" ")
+      command = build_command(cmd, args)
+      stdout, stderr = execute(command)
 
-      ssh.exec! command do |_, stream, data|
-        raise ::Herd::CommandError, data if stream == :stderr
+      record_command(command, stdout, stderr)
+      raise ::Herd::CommandError.new(command, stderr) unless stderr.empty?
 
-        return data
-      end
+      stdout
     end
 
     def respond_to_missing?(cmd)
       OS_COMMANDS.include?(cmd) || super
+    end
+
+    def stdout_log
+      @stdout_buffer.dup
+    end
+
+    def stderr_log
+      @stderr_buffer.dup
+    end
+
+    def transcript
+      @command_log.map(&:dup)
+    end
+
+    def attach_host(host)
+      @current_host = host
+    end
+
+    def host_identity
+      current_host&.identity
     end
 
     class << self
@@ -53,6 +72,43 @@ module Herd
                              .map { |const_name| Herd::SessionCommands.const_get(const_name) }
                              .select { |value| value.is_a?(Module) }
       end
+    end
+
+    private
+
+    def build_command(cmd, args)
+      ([cmd.to_s] + args.map(&:to_s)).join(" ")
+    end
+
+    def execute(command)
+      stdout = +""
+      stderr = +""
+
+      ssh.exec!(command) do |_, stream, data|
+        case stream
+        when :stderr then stderr << data
+        else stdout << data
+        end
+      end
+
+      [stdout, stderr]
+    end
+
+    def record_command(command, stdout, stderr)
+      @command_log << {
+        command: command,
+        stdout: stdout.dup,
+        stderr: stderr.dup
+      }
+
+      @stdout_buffer << stdout
+      @stderr_buffer << stderr
+    end
+
+    def reset_transcript
+      @command_log = []
+      @stdout_buffer = +""
+      @stderr_buffer = +""
     end
   end
 end
