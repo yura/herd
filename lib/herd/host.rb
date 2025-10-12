@@ -19,13 +19,13 @@ module Herd
       end
     end
 
-    def exec(command = nil, &block)
+    def exec(command = nil, &)
       Net::SSH.start(host, user, ssh_options) do |ssh|
         session = Herd::Session.new(ssh)
 
         output = nil
         output = session.send(command) if command
-        output = session.instance_exec(&block) if block_given?
+        output = session.instance_exec(&) if block_given?
         output
       end
     end

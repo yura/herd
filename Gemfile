@@ -2,6 +2,8 @@
 
 source "https://rubygems.org"
 
+ruby "3.4.2"
+
 # Specify your gem's dependencies in herd.gemspec
 gemspec
 
@@ -11,3 +13,14 @@ gem "rake", "~> 13.0"
 gem "bcrypt_pbkdf", "~> 1.1"
 gem "ed25519", "~> 1.4"
 gem "net-ssh", "~> 7.3"
+
+group :development, :test do
+  gem "rspec", "~> 3.0"
+  gem "rubocop", "~> 1.21"
+  gem "rubocop-rake"
+  gem "rubocop-rspec"
+end
+
+group :development do
+  gem "yard", "~> 0.9"
+end

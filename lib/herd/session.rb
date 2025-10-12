@@ -3,7 +3,8 @@
 module Herd
   # Session for executing commands on the remote host
   class Session
-    COMMANDS = %i[cat chmod echo hostname touch].freeze
+    OS_COMMANDS = %i[cat chmod echo hostname touch].freeze
+    CUSTOM_COMMANDS_DIR = File.expand_path("session/commands", __dir__)
 
     attr_reader :ssh
 
@@ -11,19 +12,10 @@ module Herd
       @ssh = ssh
     end
 
-    def authorized_keys
-      cat("~/.ssh/authorized_keys")&.chomp&.split("\n") || []
-    end
-
-    def add_authorized_key(key)
-      touch("~/.ssh/authorized_keys")
-      chmod("600 ~/.ssh/authorized_keys")
-      echo "'#{key}' >> ~/.ssh/authorized_keys"
-    end
-
     def method_missing(cmd, *args)
-      command = cmd.to_s
-      command = "#{command} #{args.join(" ")}" if args
+      command_parts = [cmd.to_s]
+      command_parts.concat(args.map(&:to_s)) if args.any?
+      command = command_parts.join(" ")
 
       ssh.exec! command do |_, stream, data|
         raise ::Herd::CommandError, data if stream == :stderr
@@ -33,7 +25,36 @@ module Herd
     end
 
     def respond_to_missing?(cmd)
-      COMMANDS.include?(cmd) || super
+      OS_COMMANDS.include?(cmd) || super
+    end
+
+    class << self
+      def load_command_modules
+        command_files.each { |file| require file }
+
+        session_command_modules.each do |mod|
+          next if ancestors.include?(mod)
+
+          prepend mod
+        end
+      end
+
+      private
+
+      def command_files
+        Dir[File.join(CUSTOM_COMMANDS_DIR, "*.rb")]
+      end
+
+      def session_command_modules
+        return [] unless defined?(Herd::SessionCommands)
+
+        Herd::SessionCommands.constants
+                             .sort
+                             .map { |const_name| Herd::SessionCommands.const_get(const_name) }
+                             .select { |value| value.is_a?(Module) }
+      end
     end
   end
 end
+
+Herd::Session.load_command_modules
