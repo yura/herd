@@ -3,8 +3,8 @@
 module Herd
   # Session for executing commands on the remote host
   class Session
-    COMMANDS = %i[cat chmod echo hostname touch].freeze
-    COMMANDS_DIR = File.expand_path("session/commands", __dir__)
+    OS_COMMANDS = %i[cat chmod echo hostname touch].freeze
+    CUSTOM_COMMANDS_DIR = File.expand_path("session/commands", __dir__)
 
     attr_reader :ssh
 
@@ -25,7 +25,7 @@ module Herd
     end
 
     def respond_to_missing?(cmd)
-      COMMANDS.include?(cmd) || super
+      OS_COMMANDS.include?(cmd) || super
     end
 
     class << self
@@ -42,7 +42,7 @@ module Herd
       private
 
       def command_files
-        Dir[File.join(COMMANDS_DIR, "*.rb")]
+        Dir[File.join(CUSTOM_COMMANDS_DIR, "*.rb")]
       end
 
       def session_command_modules
