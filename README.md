@@ -55,6 +55,25 @@ runner.exec("hostname") # ["alpha001\n", "omega001\n"]
 runner.exec { hostname + uptime } # ["alpha001\n2000 years\n", "omega001\2500 years\n"]
 ```
 
+### Something more complex
+
+```ruby
+public_key_path = File.expand_path("~/.ssh/id_ed25519.pub")
+my_key = File.read(public_key_path).chomp
+
+result = runner.exec do
+  h = hostname
+  keys = authorized_keys
+
+  if keys.include?(my_key)
+    puts "Key already in authorized_keys on host #{h}"
+  else
+    add_authorized_key my_key
+    puts "Added new key for host #{h}"
+  end
+end
+```
+
 ## Development
 
 After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
