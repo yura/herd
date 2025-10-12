@@ -52,7 +52,7 @@ module Herd
         command_files.each { |file| require file }
 
         session_command_modules.each do |mod|
-          next if ancestors.include?(mod)
+          next if self <= mod
 
           prepend mod
         end
