@@ -20,3 +20,7 @@ group :development, :test do
   gem "rubocop-rake"
   gem "rubocop-rspec"
 end
+
+group :development do
+  gem "yard", "~> 0.9"
+end
