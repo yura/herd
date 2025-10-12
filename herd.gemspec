@@ -9,7 +9,11 @@ Gem::Specification.new do |spec|
   spec.email = ["yury.kotlyarov@gmail.com"]
 
   spec.summary = "Fast host configuration tool"
-  spec.description = "Simple ruby DSL for fast host configuration. Supports Ubuntu and requires SSH server running on each targets host."
+  spec.description = <<~DESC
+    Simple ruby DSL for fast host configuration. Supports Ubuntu and requires
+    SSH server running on each targets host.
+  DESC
+
   spec.homepage = "https://github.com/yura/herd"
   spec.license = "MIT"
   spec.required_ruby_version = ">= 3.2.0"
