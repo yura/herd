@@ -6,10 +6,11 @@ module Herd
     OS_COMMANDS = %i[cat chmod echo hostname touch].freeze
     CUSTOM_COMMANDS_DIR = File.expand_path("session/commands", __dir__)
 
-    attr_reader :ssh
+    attr_reader :ssh, :password
 
-    def initialize(ssh)
+    def initialize(ssh, password = nil)
       @ssh = ssh
+      @password = password
     end
 
     def method_missing(cmd, *args)
@@ -17,11 +18,20 @@ module Herd
       command_parts.concat(args.map(&:to_s)) if args.any?
       command = command_parts.join(" ")
 
-      ssh.exec! command do |_, stream, data|
-        raise ::Herd::CommandError, data if stream == :stderr
+      run(command)
+    end
 
-        return data
+    def run(command)
+      result = []
+      ssh.open_channel do |channel|
+        channel.request_pty do |ch, success|
+          raise ::Herd::CommandError, "could not obtain pty" unless success
+
+          channel_run(ch, command, result)
+        end
       end
+      ssh.loop
+      result.join
     end
 
     def respond_to_missing?(cmd)
@@ -52,6 +62,20 @@ module Herd
                              .sort
                              .map { |const_name| Herd::SessionCommands.const_get(const_name) }
                              .select { |value| value.is_a?(Module) }
+      end
+    end
+
+    private
+
+    def channel_run(channel, command, result)
+      channel.exec(command) do |c, _|
+        c.on_data do |_, data|
+          result << data
+        end
+
+        c.on_extended_data do |_, _, data|
+          raise ::Herd::CommandError, data
+        end
       end
     end
   end

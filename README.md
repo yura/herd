@@ -4,9 +4,9 @@ Fast host configuration tool.
 
 ## TODO
 
-* [ ] Commands with arguments
+* [x] Run with `sudo`
+* [x] Commands with arguments
 * [ ] Reading and writing files
-* [ ] Run with `sudo`
 
 ## Installation
 
