@@ -7,8 +7,6 @@ require "herd/cli/run_command"
 module Herd
   # Minimal command-line interface for running recipes on multiple hosts.
   class CLI
-    DEFAULT_USER = "root"
-
     def initialize(argv)
       @argv = argv.dup
     end

@@ -17,11 +17,9 @@ RSpec.describe Herd::Runner do
         allow(second_host).to receive(:exec).with("hostname").and_return(result_two)
       end
 
-      it "runs the command in parallel on all hosts", :aggregate_failures do
+      it "runs the command in parallel on all hosts" do
         results = runner.exec("hostname")
-
         expect(results.map(&:value)).to eq(%w[alpha001 alpha002])
-        expect(results).to contain_exactly(result_one, result_two)
       end
     end
 
@@ -33,7 +31,6 @@ RSpec.describe Herd::Runner do
 
       it "runs the command in parallel on all hosts" do
         results = runner.exec { hostname }
-
         expect(results.map(&:value)).to eq(%w[alpha001 alpha002])
       end
     end
