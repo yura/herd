@@ -6,7 +6,7 @@ Fast host configuration tool.
 
 * [x] Run with `sudo`
 * [x] Commands with arguments
-* [ ] Reading and writing files
+* [x] Reading and writing files
 
 ## Installation
 
@@ -71,6 +71,24 @@ result = runner.exec do
     add_authorized_key my_key
     puts "Added new key for host #{h}"
   end
+end
+
+# or even simpler
+my_key2 = "ssh-ed25519 ..."
+
+result = runner.exec do
+  authorized_keys_contains_exactly([my_key, my_key2])
+end
+```
+
+### Files
+
+Following example takes file from the `./templates/etc/sudoers.d/50-elon`
+and copy content to the remote host with required permissions.
+
+```ruby
+result = runner.exec do
+  file("/etc/sudoers.d/50-elon", "root", "root", 440)
 end
 ```
 

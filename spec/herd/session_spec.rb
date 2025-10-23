@@ -56,9 +56,9 @@ RSpec.describe Herd::Session do
       before do
         allow(mock_ssh_channel).to receive(:exec).with("touch ~/.ssh/authorized_keys")
                                                  .and_yield(mock_ssh_channel, nil)
-        allow(mock_ssh_channel).to receive(:exec).with("chmod 600 ~/.ssh/authorized_keys")
+        allow(mock_ssh_channel).to receive(:exec).with("sudo chmod 600 ~/.ssh/authorized_keys")
                                                  .and_yield(mock_ssh_channel, nil)
-        allow(mock_ssh_channel).to receive(:exec).with("echo '#{public_key}' >> ~/.ssh/authorized_keys")
+        allow(mock_ssh_channel).to receive(:exec).with("tee -a ~/.ssh/authorized_keys << EOF\n#{public_key}\nEOF")
                                                  .and_yield(mock_ssh_channel, nil)
       end
 
@@ -71,13 +71,13 @@ RSpec.describe Herd::Session do
       it "sets strict permissions on authorized keys file" do
         session.add_authorized_key(public_key)
 
-        expect(mock_ssh_channel).to have_received(:exec).with("chmod 600 ~/.ssh/authorized_keys")
+        expect(mock_ssh_channel).to have_received(:exec).with("sudo chmod 600 ~/.ssh/authorized_keys")
       end
 
       it "appends the key into authorized keys file" do
         session.add_authorized_key(public_key)
-
-        expect(mock_ssh_channel).to have_received(:exec).with("echo '#{public_key}' >> ~/.ssh/authorized_keys")
+        command = "tee -a ~/.ssh/authorized_keys << EOF\n#{public_key}\nEOF"
+        expect(mock_ssh_channel).to have_received(:exec).with(command)
       end
     end
   end

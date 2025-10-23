@@ -70,12 +70,14 @@ module Herd
     def channel_run(channel, command, result)
       channel.exec(command) do |c, _|
         c.on_data do |_, data|
-          result << data
+          if data.include?("[sudo] password for")
+            c.send_data "#{password}\n"
+          else
+            result << data
+          end
         end
 
-        c.on_extended_data do |_, _, data|
-          raise ::Herd::CommandError, data
-        end
+        c.on_extended_data { |_, _, data| raise ::Herd::CommandError, data }
       end
     end
   end
