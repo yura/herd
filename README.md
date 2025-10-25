@@ -7,6 +7,10 @@ Fast host configuration tool.
 * [x] Run with `sudo`
 * [x] Commands with arguments
 * [x] Reading and writing files
+* [ ] Copy dirs
+* [ ] Crontab
+* [ ] Add user to group
+* [ ] Templates (ERB)
 
 ## Installation
 
