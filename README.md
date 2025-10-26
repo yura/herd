@@ -10,7 +10,7 @@ Fast host configuration tool.
 * [x] Templates (ERB)
 * [x] Copy dirs
   * [ ] Compare with Rsync
-* [ ] Crontab
+* [x] Crontab
 * [ ] Add user to group
 
 ## Installation
@@ -118,6 +118,12 @@ runner.exec do |values|
   # values contains all named arguments from the host constructor: { alias: "alpha001" }
   template("/home/elon/.env", "elon", "wheels", values: values)
 end
+```
+
+### Crontab
+
+```ruby
+crontab("* * * * * /some-script.sh")
 ```
 
 ## Development
