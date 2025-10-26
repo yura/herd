@@ -35,7 +35,7 @@ RSpec.describe Herd::Session do
 
   context "with AuthorizedKeys commands" do
     it "preprends authorized keys helpers" do
-      expect(described_class.ancestors).to include(Herd::SessionCommands::AuthorizedKeys)
+      expect(described_class.ancestors).to include(Herd::Commands::AuthorizedKeys)
     end
 
     describe "#authorized_keys" do
@@ -84,7 +84,7 @@ RSpec.describe Herd::Session do
 
   context "with Packages commands" do
     it "preprends packages helpers" do
-      expect(described_class.ancestors).to include(Herd::SessionCommands::Packages)
+      expect(described_class.ancestors).to include(Herd::Commands::Packages)
     end
 
     describe "#install_packages" do

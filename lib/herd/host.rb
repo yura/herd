@@ -5,20 +5,22 @@ require "net/ssh"
 module Herd
   # Target host
   class Host
-    attr_reader :host, :user, :ssh_options, :password
+    attr_reader :host, :user, :ssh_options, :password, :vars
 
-    def initialize(host, user, port: 22, private_key_path: nil, password: nil)
+    # port, private_key_path, password are for the ssh connection
+    def initialize(host, user, options)
       @host = host
       @user = user
 
-      @ssh_options = { port: port, timeout: 10 }
-      if private_key_path
-        @ssh_options[:keys] = [private_key_path]
+      @ssh_options = { port: options.delete(:port) || 22, timeout: 10 }
+      if options[:private_key_path]
+        @ssh_options[:keys] = [options.delete(:private_key_path)]
       else
-        @ssh_options[:password] = password
+        @ssh_options[:password] = options[:password]
       end
 
-      @password = password
+      @password = options.delete(:password)
+      @vars = options
     end
 
     def exec(command = nil, &)
@@ -27,7 +29,7 @@ module Herd
 
         output = nil
         output = session.send(command) if command
-        output = session.instance_exec(&) if block_given?
+        output = session.instance_exec(vars, &) if block_given?
 
         output
       end

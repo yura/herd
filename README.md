@@ -7,10 +7,11 @@ Fast host configuration tool.
 * [x] Run with `sudo`
 * [x] Commands with arguments
 * [x] Reading and writing files
-* [ ] Copy dirs
+* [x] Templates (ERB)
+* [x] Copy dirs
+  * [ ] Compare with Rsync
 * [ ] Crontab
 * [ ] Add user to group
-* [ ] Templates (ERB)
 
 ## Installation
 
@@ -85,14 +86,37 @@ result = runner.exec do
 end
 ```
 
-### Files
+### Files and directories
 
-Following example takes file from the `./templates/etc/sudoers.d/50-elon`
+Following example takes file from the `./files/etc/sudoers.d/50-elon`
 and copy content to the remote host with required permissions.
 
 ```ruby
 result = runner.exec do
   file("/etc/sudoers.d/50-elon", "root", "root", 440)
+
+  # or copy dirs
+  dir("/home/elon/projects", "elon", "elon")
+end
+```
+
+### Templates
+
+Following example takes ERB template from the `./templates/home/elon/.env.erb`
+and renders using additional `Herd::Host` values and copies content to the remote host
+`/home/elon/.env`:
+
+```erb
+# File: ./templates/home/elon/.env.erb
+export ALIAS=<%= alias %>
+```
+
+```ruby
+host = Herd::Host.new("tesla.com", "elon", password: "T0pS3kr3t", alias: "alpha001")
+runner = Runner.new([host])
+runner.exec do |values|
+  # values contains all named arguments from the host constructor: { alias: "alpha001" }
+  template("/home/elon/.env", "elon", "wheels", values: values)
 end
 ```
 

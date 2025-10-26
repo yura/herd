@@ -4,7 +4,9 @@ require "diff/lcs"
 require "diff/lcs/hunk"
 
 module Herd
-  module SessionCommands
+  module Commands
+    FILES = "files"
+
     # Create, read, write, remove files, check permssions.
     module Files
       class PermissionDeniedError < StandardError; end
@@ -21,13 +23,37 @@ module Herd
         run("test -w #{path}; echo $?").chomp == "0"
       end
 
-      def file(path, user, group, mode)
-        required_content = File.read(File.join("templates", path))
+      def dir(path, user, group, sudo: false)
+        Dir.glob(File.join(FILES, path, "**/*"), File::FNM_DOTMATCH).each do |f|
+          remote_path = f.sub(FILES, "")
+          if File.directory?(f)
+            mkdir_p(remote_path, user, group, sudo: sudo)
+          else
+            file(remote_path, user, group)
+          end
+        end
+      end
+
+      def mkdir_p(path, user, group, sudo: false)
+        if sudo
+          run("sudo mkdir -p #{path}")
+        else
+          run("mkdir -p #{path}")
+        end
+        file_user_and_group(path, user, group)
+      end
+
+      def file(path, user, group, content: nil, mode: nil)
+        required_content = if content.nil?
+                             File.read(File.join(FILES, path))
+                           else
+                             content
+                           end
 
         expect_file_content_equals(path, required_content)
 
         file_user_and_group(path, user, group)
-        file_permissions(path, mode)
+        file_permissions(path, mode) if mode
       end
 
       def expect_file_content_equals(path, required_content)
@@ -38,7 +64,7 @@ module Herd
             write_to_file!(path, required_content, sudo: true)
           end
         else
-          write_to_file!(path, content, sudo: true)
+          write_to_file!(path, required_content, sudo: true)
         end
       end
 

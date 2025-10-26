@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Herd
-  module SessionCommands
+  module Commands
     # Working with package managers, like apt for Ubuntu
     module Packages
       def install_packages(packages)

@@ -4,7 +4,7 @@ module Herd
   # Session for executing commands on the remote host
   class Session
     OS_COMMANDS = %i[cat chmod echo hostname touch].freeze
-    CUSTOM_COMMANDS_DIR = File.expand_path("session/commands", __dir__)
+    CUSTOM_COMMANDS_DIR = File.expand_path("commands", __dir__)
 
     attr_reader :ssh, :password
 
@@ -42,7 +42,7 @@ module Herd
       def load_command_modules
         command_files.each { |file| require file }
 
-        session_command_modules.each do |mod|
+        command_modules.each do |mod|
           next if self <= mod
 
           prepend mod
@@ -55,13 +55,13 @@ module Herd
         Dir[File.join(CUSTOM_COMMANDS_DIR, "*.rb")]
       end
 
-      def session_command_modules
-        return [] unless defined?(Herd::SessionCommands)
+      def command_modules
+        return [] unless defined?(Herd::Commands)
 
-        Herd::SessionCommands.constants
-                             .sort
-                             .map { |const_name| Herd::SessionCommands.const_get(const_name) }
-                             .select { |value| value.is_a?(Module) }
+        Herd::Commands.constants
+                      .sort
+                      .map { |const_name| Herd::Commands.const_get(const_name) }
+                      .select { |value| value.is_a?(Module) }
       end
     end
 

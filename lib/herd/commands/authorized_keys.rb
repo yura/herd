@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Herd
-  module SessionCommands
+  module Commands
     # Commands for inspecting and managing authorized SSH keys.
     module AuthorizedKeys
       AUTHORIZED_KEYS_FILE = "~/.ssh/authorized_keys"
