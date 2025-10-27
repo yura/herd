@@ -115,7 +115,9 @@ export ALIAS=<%= alias %>
 host = Herd::Host.new("tesla.com", "elon", password: "T0pS3kr3t", alias: "alpha001")
 runner = Runner.new([host])
 runner.exec do |values|
-  # values contains all named arguments from the host constructor: { alias: "alpha001" }
+  # values contain named arguments (except password and public_key_path) 
+  # from the host constructor:
+  # { host: "tesla.com", port: 22, user: "elon", alias: "alpha001" }
   template("/home/elon/.env", "elon", "wheels", values: values)
 end
 ```

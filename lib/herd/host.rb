@@ -12,7 +12,7 @@ module Herd
       @host = host
       @user = user
 
-      @ssh_options = { port: options.delete(:port) || 22, timeout: 10 }
+      @ssh_options = { port: options[:port] || 22, timeout: 10 }
       if options[:private_key_path]
         @ssh_options[:keys] = [options.delete(:private_key_path)]
       else
@@ -20,7 +20,7 @@ module Herd
       end
 
       @password = options.delete(:password)
-      @vars = options
+      @vars = options.merge(host: host, user: user)
     end
 
     def exec(command = nil, &)
