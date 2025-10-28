@@ -11,6 +11,7 @@ Fast host configuration tool.
 * [x] Copy dirs
   * [ ] Compare with Rsync
 * [x] Crontab
+* [ ] Log all commands for all hosts
 * [ ] Add user to group
 
 ## Installation
@@ -58,6 +59,21 @@ runner.exec("hostname") # ["alpha001\n", "omega001\n"]
 
 # or run block of commands on all hosts in parallel
 runner.exec { hostname + uptime } # ["alpha001\n2000 years\n", "omega001\2500 years\n"]
+```
+
+List of hosts can be loaded from the CSV file:
+
+```ruby
+# hosts.csv
+host,port,user,password,some_param1,some_param2
+alpha.tesla.com,2022,elon,T0pS3kr3t,value1,value2
+omega.tesla.com,2023,elon,T0pS3kr3t2,value3,value4
+```
+
+```ruby
+hosts = Herd::Host.from_csv("hosts.csv")
+runner = Herd::Runner.new(hosts)
+...
 ```
 
 ### Something more complex

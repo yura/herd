@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "csv"
 require "net/ssh"
 
 module Herd
@@ -32,6 +33,18 @@ module Herd
         output = session.instance_exec(vars, &) if block_given?
 
         output
+      end
+    rescue StandardError => e
+      puts "#{vars.inspect}: #{e.message}"
+    end
+
+    def self.from_csv(file = "hosts.csv")
+      CSV.read(file, headers: true).map do |csv|
+        h = csv.to_h.transform_keys(&:to_sym)
+        host = h.delete(:host)
+        user = h.delete(:user)
+        port = h.delete(:port).to_i
+        new(host, user, h.merge(port: port))
       end
     end
   end
