@@ -11,7 +11,7 @@ Fast host configuration tool.
 * [x] Copy dirs
   * [ ] Compare with Rsync
 * [x] Crontab
-* [ ] Log all commands for all hosts
+* [x] Log all commands for all hosts
 * [ ] Add user to group
 
 ## Installation
@@ -142,6 +142,19 @@ end
 
 ```ruby
 crontab("* * * * * /some-script.sh")
+```
+
+### Logs
+Herd logs all commands, outputs and errors into the `log/<host>_<port>_<user>/<timestamp>.json` files:
+
+```json
+{
+{"vars":{"alias":"alpha001","port":22,"host":"tesla.com","user":"elon"}},
+{"timestamp":"2025-11-09 18:10:21.134","command":"test -a /home/elon/.herd-version; echo $?"},
+{"timestamp":"2025-11-09 18:10:21.395","command":"test -a /home/elon/.herd-version; echo $?","output":"4\r\n","time":0.261358},
+{"timestamp":"2025-11-09 18:10:22.013","command":"cat /home/home/.herd-version"},
+{"timestamp":"2025-11-09 18:10:22.314","command":"cat /home/home/.herd-version","output":"4\r\n","time":0.301}
+}
 ```
 
 ## Development
