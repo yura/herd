@@ -15,6 +15,7 @@ gem "csv"
 gem "diff-lcs"
 gem "ed25519", "~> 1.4"
 gem "erb"
+gem "json"
 gem "net-ssh", "~> 7.3"
 
 group :development, :test do

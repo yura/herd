@@ -100,6 +100,7 @@ DEPENDENCIES
   erb
   herd-rb!
   irb
+  json
   net-ssh (~> 7.3)
   rake (~> 13.0)
   rspec (~> 3.0)

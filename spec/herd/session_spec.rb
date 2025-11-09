@@ -3,10 +3,10 @@
 require "net/ssh"
 
 RSpec.describe Herd::Session do
-  let(:session) { described_class.new(mock_ssh_session, password) }
-  let(:password) { "T0pS3kr3t" }
+  let(:session) { described_class.new(mock_ssh_session, "T0pS3kr3t", mock_log) }
   let(:mock_ssh_session) { instance_double(Net::SSH::Connection::Session) }
   let(:mock_ssh_channel) { instance_double(Net::SSH::Connection::Channel) }
+  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil) }
 
   before do
     allow(mock_ssh_session).to receive(:open_channel).and_yield(mock_ssh_channel)

@@ -3,14 +3,17 @@
 module Herd
   # Session for executing commands on the remote host
   class Session
+    include Herd::Log
+
     OS_COMMANDS = %i[cat chmod echo hostname touch].freeze
     CUSTOM_COMMANDS_DIR = File.expand_path("commands", __dir__)
 
-    attr_reader :ssh, :password
+    attr_reader :ssh, :password, :log
 
-    def initialize(ssh, password = nil)
+    def initialize(ssh, password, log)
       @ssh = ssh
       @password = password
+      @log = log
     end
 
     def method_missing(cmd, *args)
@@ -27,7 +30,7 @@ module Herd
         channel.request_pty do |ch, success|
           raise ::Herd::CommandError, "could not obtain pty" unless success
 
-          channel_run(ch, command, result)
+          channel_run(ch, command, result, Time.now)
         end
       end
       ssh.loop
@@ -67,18 +70,32 @@ module Herd
 
     private
 
-    def channel_run(channel, command, result)
+    def channel_run(channel, command, result, started_at)
+      log_command_start(started_at, command)
+
       channel.exec(command) do |c, _|
         c.on_data do |_, data|
-          if data.include?("[sudo] password for")
-            c.send_data "#{password}\n"
-          else
-            result << data
-          end
+          process_output(c, command, started_at, data, result)
         end
 
-        c.on_extended_data { |_, _, data| raise ::Herd::CommandError, data }
+        c.on_extended_data do |_, _, data|
+          process_error(command, started_at, data)
+        end
       end
+    end
+
+    def process_output(channel, command, started_at, data, result)
+      if data.include?("[sudo] password for")
+        channel.send_data "#{password}\n"
+      else
+        log_command_output(command, data, started_at)
+        result << data
+      end
+    end
+
+    def process_error(command, started_at, data)
+      log_command_error(command, data, started_at)
+      raise ::Herd::CommandError, data
     end
   end
 end

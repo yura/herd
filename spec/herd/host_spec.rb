@@ -6,6 +6,7 @@ RSpec.describe Herd::Host do
   let(:host) { described_class.new("tesla.com", "elon", password: "T0pS3kr3t") }
   let(:mock_ssh_session) { instance_double(Net::SSH::Connection::Session) }
   let(:mock_ssh_channel) { instance_double(Net::SSH::Connection::Channel) }
+  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil) }
 
   before do
     allow(Net::SSH).to receive(:start).and_yield(mock_ssh_session)
@@ -16,6 +17,8 @@ RSpec.describe Herd::Host do
     allow(mock_ssh_channel).to receive(:exec).with("hostname").and_yield(mock_ssh_channel, nil)
     allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "alpha001")
     allow(mock_ssh_channel).to receive(:on_extended_data)
+    allow(FileUtils).to receive(:mkdir_p).with(any_args)
+    allow(File).to receive(:open).with(any_args).and_return(mock_log)
   end
 
   describe "#exec" do
