@@ -9,7 +9,7 @@ module Herd
   class Host
     include Herd::Log
 
-    attr_reader :host, :user, :ssh_options, :password, :vars, :log
+    attr_reader :host, :port, :user, :ssh_options, :password, :vars, :log
 
     # port, private_key_path, password are for the ssh connection
     def initialize(host, user, options)
@@ -18,6 +18,7 @@ module Herd
 
       create_ssh_options(options)
 
+      @port = ssh_options[:port]
       @password = options.delete(:password)
       @vars = options.merge(host: host, user: user, port: ssh_options[:port])
 
@@ -35,7 +36,7 @@ module Herd
 
     def exec(command = nil, &)
       Net::SSH.start(host, user, ssh_options) do |ssh|
-        session = Herd::Session.new(ssh, password, log)
+        session = Herd::Session.new(self, ssh, password, log)
 
         output = session.send(command) if command
         output = session.instance_exec(vars, &) if block_given?

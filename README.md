@@ -12,6 +12,16 @@ Fast host configuration tool.
   * [ ] Compare with Rsync
 * [x] Crontab
 * [x] Log all commands for all hosts
+* [ ] Bug: if file contains some shell variable like `$host` it replaces it with empty value
+* [ ] Ask password
+* [ ] Does not raise an CommandError if there is an error in a command
+* [ ] Check file contains some string, eg `/home/elon/.bashrc` should contain `export EDITOR=vim`
+* [ ] ANSI terminal
+* [ ] Parallel execution
+  * [ ] Add new parameter to "#exec". By default it will be :sequential execution, optionally :parallel
+        for parallel execution you can add `:depends_on` for child task and `:label` for parent one.
+  * [ ] for sequential execution you can add parallel block in any place
+* [ ] Interpret Dockerfile
 * [ ] Add user to group
 
 ## Installation

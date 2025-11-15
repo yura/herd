@@ -2,6 +2,7 @@
 
 require "diff/lcs"
 require "diff/lcs/hunk"
+require "rsync"
 
 module Herd
   module Commands
@@ -23,34 +24,33 @@ module Herd
         run("test -w #{path}; echo $?").chomp == "0"
       end
 
-      def dir(path, user, group, sudo: false)
-        Dir.glob(File.join(FILES, path, "**/*"), File::FNM_DOTMATCH).each do |f|
-          remote_path = f.sub(FILES, "")
-          if File.directory?(f)
-            mkdir_p(remote_path, user, group, sudo: sudo)
-          else
-            file(remote_path, user, group)
-          end
+      def dir(path, user, group)
+        mkdir_p(path, user, group)
+        source = "#{File.expand_path(File.join(FILES, path))}/"
+        destination = "#{host.user}@#{host.host}:#{path}"
+        # --delete
+        params = "-rptqz --checksum --force -e \"ssh -p #{host.port}\""
+
+        Rsync.run(source, destination, params) do |result|
+          # FIXME: raise some exception
+          puts result.error unless result.success?
         end
+
+        dir_user_and_group(path, user, group)
       end
 
-      def mkdir_p(path, user, group, sudo: false)
+      def mkdir_p(path, user, group, sudo: false, mode: nil)
         if sudo
           run("sudo mkdir -p #{path}")
         else
           run("mkdir -p #{path}")
         end
         file_user_and_group(path, user, group)
+        file_permissions(path, mode) if mode
       end
 
-      def file(path, user, group, content: nil, mode: nil)
-        required_content = if content.nil?
-                             File.read(File.join(FILES, path))
-                           else
-                             content
-                           end
-
-        expect_file_content_equals(path, required_content)
+      def file(path, user, group, content: File.read(File.join(FILES, path)), mode: nil)
+        expect_file_content_equals(path, content)
 
         file_user_and_group(path, user, group)
         file_permissions(path, mode) if mode
@@ -112,6 +112,10 @@ EOF))
         run(%(#{command} #{path} << EOF
 #{content}
 EOF))
+      end
+
+      def dir_user_and_group(path, user, group)
+        sudo("chown -R #{user}:#{group} #{path}")
       end
 
       def file_user_and_group(path, user, group)

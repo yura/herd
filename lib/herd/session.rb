@@ -8,9 +8,10 @@ module Herd
     OS_COMMANDS = %i[cat chmod echo hostname touch].freeze
     CUSTOM_COMMANDS_DIR = File.expand_path("commands", __dir__)
 
-    attr_reader :ssh, :password, :log
+    attr_reader :host, :ssh, :password, :log
 
-    def initialize(ssh, password, log)
+    def initialize(host, ssh, password, log)
+      @host = host
       @ssh = ssh
       @password = password
       @log = log

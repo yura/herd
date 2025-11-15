@@ -17,6 +17,7 @@ gem "ed25519", "~> 1.4"
 gem "erb"
 gem "json"
 gem "net-ssh", "~> 7.3"
+gem "rsync"
 
 group :development, :test do
   gem "rspec", "~> 3.0"
