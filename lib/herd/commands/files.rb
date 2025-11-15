@@ -101,17 +101,15 @@ module Herd
       def write_to_file(path, content, sudo: false)
         command = "tee"
         command = "sudo #{command}" if sudo
-        run(%(#{command} #{path} << EOF
-#{content}
-EOF))
+        run(%(#{command} #{path} << "EOF"
+#{content}EOF))
       end
 
       def append_to_file(path, content, sudo: false)
         command = "tee -a"
         command = "sudo #{command}" if sudo
-        run(%(#{command} #{path} << EOF
-#{content}
-EOF))
+        run(%(#{command} #{path} << "EOF"
+#{content}EOF))
       end
 
       def dir_user_and_group(path, user, group)

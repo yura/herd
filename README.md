@@ -12,7 +12,7 @@ Fast host configuration tool.
   * [ ] Compare with Rsync
 * [x] Crontab
 * [x] Log all commands for all hosts
-* [ ] Bug: if file contains some shell variable like `$host` it replaces it with empty value
+* [x] Bug: if file contains some shell variable like `$host` it replaces it with empty value
 * [ ] Ask password
 * [ ] Does not raise an CommandError if there is an error in a command
 * [ ] Check file contains some string, eg `/home/elon/.bashrc` should contain `export EDITOR=vim`
