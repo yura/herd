@@ -20,6 +20,8 @@ gem "net-ssh", "~> 7.3"
 gem "rsync"
 
 group :development, :test do
+  gem "dotenv"
+
   gem "rspec", "~> 3.0"
   gem "rubocop", "~> 1.21",  require: false
   gem "rubocop-performance", require: false

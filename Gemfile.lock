@@ -11,6 +11,7 @@ GEM
     csv (3.3.5)
     date (3.4.1)
     diff-lcs (1.6.2)
+    dotenv (3.2.0)
     ed25519 (1.4.0)
     erb (5.0.3)
     io-console (0.8.1)
@@ -97,6 +98,7 @@ DEPENDENCIES
   bcrypt_pbkdf (~> 1.1)
   csv
   diff-lcs
+  dotenv
   ed25519 (~> 1.4)
   erb
   herd-rb!
