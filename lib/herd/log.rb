@@ -25,7 +25,6 @@ module Herd
     end
 
     def log_connection_error(error)
-      puts "#{vars.inspect}: #{error.message}"
       log.puts ","
       log.print({ error: error.message, error_trace: error.backtrace }.to_json)
     end
@@ -41,10 +40,11 @@ module Herd
       log.print({ timestamp: time(now), command: command, output: output, time: now - started_at }.to_json)
     end
 
-    def log_command_error(command, error, started_at)
+    def log_command_error(command, error, started_at, exit_code)
       now = Time.now
       log.puts(",")
-      log.print({ timestamp: time(now), command: command, error: error, time: now - started_at }.to_json)
+      log.print({ timestamp: time(now), command: command, error: error, exit_code: exit_code,
+                  time: now - started_at }.to_json)
     end
 
     def time(timestamp = Time.now)

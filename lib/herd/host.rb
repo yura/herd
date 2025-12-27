@@ -36,14 +36,13 @@ module Herd
 
     def exec(command = nil, &)
       Net::SSH.start(host, user, ssh_options) do |ssh|
-        session = Herd::Session.new(self, ssh, password, log)
-
-        output = session.send(command) if command
-        output = session.instance_exec(vars, &) if block_given?
-        output
+        Herd::Session.new(self, ssh, password, log).exec(command, vars, &)
       end
+    rescue Herd::CommandError
+      raise
     rescue StandardError => e
       log_connection_error(e)
+      raise
     ensure
       close_log
     end

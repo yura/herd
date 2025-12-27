@@ -13,19 +13,22 @@ RSpec.describe Herd::Session do
     allow(mock_ssh_session).to receive(:loop)
 
     allow(mock_ssh_channel).to receive(:request_pty).and_yield(mock_ssh_channel, true)
-    allow(mock_ssh_channel).to receive(:exec).with("hostname").and_yield(mock_ssh_channel, nil)
+    allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; hostname").and_yield(mock_ssh_channel, nil)
     allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "alpha001")
     allow(mock_ssh_channel).to receive(:on_extended_data)
+    allow(mock_ssh_channel).to receive(:on_request).with("exit-status").and_yield(nil,
+                                                                                  instance_double(Net::SSH::Buffer,
+                                                                                                  read_long: 0))
   end
 
   describe "#method_missing" do
     before do
-      allow(mock_ssh_session).to receive(:exec!).with("hostname").and_yield(nil, :stdout, "alpha001")
+      allow(mock_ssh_session).to receive(:exec!).with("set -o pipefail; hostname").and_yield(nil, :stdout, "alpha001")
     end
 
     it "delegates calls to SSH session" do
       session.hostname
-      expect(mock_ssh_channel).to have_received(:exec).with("hostname")
+      expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; hostname")
     end
 
     it "returns command output" do
@@ -40,7 +43,7 @@ RSpec.describe Herd::Session do
 
     describe "#authorized_keys" do
       before do
-        allow(mock_ssh_channel).to receive(:exec).with("cat ~/.ssh/authorized_keys")
+        allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; cat ~/.ssh/authorized_keys")
                                                  .and_yield(mock_ssh_channel, nil)
         allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "key1\nkey2\n")
       end
@@ -54,29 +57,30 @@ RSpec.describe Herd::Session do
       let(:public_key) { "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC" }
 
       before do
-        allow(mock_ssh_channel).to receive(:exec).with("touch ~/.ssh/authorized_keys")
+        allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; touch ~/.ssh/authorized_keys")
                                                  .and_yield(mock_ssh_channel, nil)
-        allow(mock_ssh_channel).to receive(:exec).with("sudo chmod 600 ~/.ssh/authorized_keys")
+        allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; sudo chmod 600 ~/.ssh/authorized_keys")
                                                  .and_yield(mock_ssh_channel, nil)
-        allow(mock_ssh_channel).to receive(:exec).with("tee -a ~/.ssh/authorized_keys << \"EOF\"\n#{public_key}EOF")
-                                                 .and_yield(mock_ssh_channel, nil)
+        allow(mock_ssh_channel).to \
+          receive(:exec).with("set -o pipefail; tee -a ~/.ssh/authorized_keys << \"EOF\"\n#{public_key}EOF")
+                        .and_yield(mock_ssh_channel, nil)
       end
 
       it "touches the authorized keys file" do
         session.add_authorized_key(public_key)
 
-        expect(mock_ssh_channel).to have_received(:exec).with("touch ~/.ssh/authorized_keys")
+        expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; touch ~/.ssh/authorized_keys")
       end
 
       it "sets strict permissions on authorized keys file" do
         session.add_authorized_key(public_key)
 
-        expect(mock_ssh_channel).to have_received(:exec).with("sudo chmod 600 ~/.ssh/authorized_keys")
+        expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; sudo chmod 600 ~/.ssh/authorized_keys")
       end
 
       it "appends the key into authorized keys file" do
         session.add_authorized_key(public_key)
-        command = "tee -a ~/.ssh/authorized_keys << \"EOF\"\n#{public_key}EOF"
+        command = "set -o pipefail; tee -a ~/.ssh/authorized_keys << \"EOF\"\n#{public_key}EOF"
         expect(mock_ssh_channel).to have_received(:exec).with(command)
       end
     end
@@ -88,7 +92,7 @@ RSpec.describe Herd::Session do
     end
 
     describe "#install_packages" do
-      let(:command) { %(echo -e 'T0pS3kr3t\n' | sudo -S apt install -qq -y openssh-server) }
+      let(:command) { %(set -o pipefail; echo -e 'T0pS3kr3t\n' | sudo -S apt install -qq -y openssh-server) }
 
       before do
         allow(mock_ssh_channel).to receive(:exec).with(command).and_yield(mock_ssh_channel, nil)

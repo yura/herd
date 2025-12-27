@@ -14,9 +14,12 @@ RSpec.describe Herd::Host do
     allow(mock_ssh_session).to receive(:loop)
 
     allow(mock_ssh_channel).to receive(:request_pty).and_yield(mock_ssh_channel, true)
-    allow(mock_ssh_channel).to receive(:exec).with("hostname").and_yield(mock_ssh_channel, nil)
+    allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; hostname").and_yield(mock_ssh_channel, nil)
     allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "alpha001")
     allow(mock_ssh_channel).to receive(:on_extended_data)
+    allow(mock_ssh_channel).to receive(:on_request).with("exit-status").and_yield(nil,
+                                                                                  instance_double(Net::SSH::Buffer,
+                                                                                                  read_long: 0))
     allow(FileUtils).to receive(:mkdir_p).with(any_args)
     allow(File).to receive(:open).with(any_args).and_return(mock_log)
   end
@@ -29,7 +32,7 @@ RSpec.describe Herd::Host do
 
     it "delegates calls to the SSH session" do
       host.exec("hostname")
-      expect(mock_ssh_channel).to have_received(:exec).with("hostname")
+      expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; hostname")
     end
 
     context "when run single command" do

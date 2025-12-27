@@ -17,6 +17,12 @@ module Herd
       @log = log
     end
 
+    def exec(command, vars, &)
+      output = send(command) if command
+      output = instance_exec(vars, &) if block_given?
+      output
+    end
+
     def method_missing(cmd, *args)
       command_parts = [cmd.to_s]
       command_parts.concat(args.map(&:to_s)) if args.any?
@@ -74,19 +80,31 @@ module Herd
     def channel_run(channel, command, result, started_at)
       log_command_start(started_at, command)
 
-      channel.exec(command) do |c, _|
-        c.on_data do |_, data|
-          process_output(c, command, started_at, data, result)
-        end
+      output, exit_code = nil
+      channel.exec("set -o pipefail; #{command}") do |c, _|
+        c.on_data { |_, data| output = data }
+        c.on_extended_data { |_, _, data| output = data }
+        c.on_request("exit-status") { |_, data| exit_code = data.read_long }
+      end
 
-        c.on_extended_data do |_, _, data|
-          process_error(command, started_at, data)
-        end
+      ssh.loop { exit_code.nil? }
+
+      output_with_code = { output: output, exit_code: exit_code }
+      process_output(channel, command, started_at, output_with_code, result)
+    end
+
+    def process_output(channel, command, started_at, output_with_code, result)
+      output = output_with_code[:output]
+      exit_code = output_with_code[:exit_code]
+      if exit_code.zero?
+        process_success(channel, command, started_at, output, result)
+      else
+        process_error(command, started_at, output, exit_code)
       end
     end
 
-    def process_output(channel, command, started_at, data, result)
-      if data.include?("[sudo] password for")
+    def process_success(channel, command, started_at, data, result)
+      if data&.include?("[sudo] password for")
         channel.send_data "#{password}\n"
       else
         log_command_output(command, data, started_at)
@@ -94,9 +112,9 @@ module Herd
       end
     end
 
-    def process_error(command, started_at, data)
-      log_command_error(command, data, started_at)
-      raise ::Herd::CommandError, data
+    def process_error(command, started_at, data, exit_code)
+      log_command_error(command, data, started_at, exit_code)
+      raise ::Herd::CommandError, [data, exit_code]
     end
   end
 end
