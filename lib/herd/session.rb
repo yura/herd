@@ -32,16 +32,24 @@ module Herd
     end
 
     def run(command)
+      full_command = @working_dir ? "cd #{@working_dir} && #{command}" : command
       result = []
       ssh.open_channel do |channel|
         channel.request_pty do |ch, success|
           raise ::Herd::CommandError, "could not obtain pty" unless success
 
-          channel_run(ch, command, result, Time.now)
+          channel_run(ch, full_command, result, Time.now)
         end
       end
       ssh.loop
       result.join
+    end
+
+    def within(path)
+      @working_dir = path
+      yield
+    ensure
+      @working_dir = nil
     end
 
     def respond_to_missing?(cmd)
