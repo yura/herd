@@ -21,8 +21,6 @@ module Herd
       @port = ssh_options[:port]
       @password = options.delete(:password)
       @vars = options.merge(host: host, user: user, port: ssh_options[:port])
-
-      open_log
     end
 
     def create_ssh_options(options)
@@ -35,6 +33,7 @@ module Herd
     end
 
     def exec(command = nil, &)
+      open_log
       Net::SSH.start(host, user, ssh_options) do |ssh|
         Herd::Session.new(self, ssh, password, log).exec(command, vars, &)
       end

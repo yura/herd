@@ -8,13 +8,18 @@ module Herd
 
     def run(only: nil, &block)
       @only = only&.to_sym
+      @stages = []
       instance_exec(&block)
+
+      @runner.exec do
+        @stages.each { |name, args| send(name, *args) }
+      end
     end
 
     def method_missing(name, *args)
       return if @only && @only != name.to_sym
 
-      @runner.exec { send(name, *args) }
+      @stages << [name, args]
     end
 
     def respond_to_missing?(name, include_private = false)
