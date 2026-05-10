@@ -82,7 +82,13 @@ module Herd
 
       output, exit_code = nil
       channel.exec("set -o pipefail; #{command}") do |c, _|
-        c.on_data { |_, data| output = data }
+        c.on_data do |_, data|
+          if data.include?("[sudo] password for")
+            c.send_data "#{password}\n"
+          else
+            output = data
+          end
+        end
         c.on_extended_data { |_, _, data| output = data }
         c.on_request("exit-status") { |_, data| exit_code = data.read_long }
       end
@@ -104,12 +110,8 @@ module Herd
     end
 
     def process_success(channel, command, started_at, data, result)
-      if data&.include?("[sudo] password for")
-        channel.send_data "#{password}\n"
-      else
-        log_command_output(command, data, started_at)
-        result << data
-      end
+      log_command_output(command, data, started_at)
+      result << data
     end
 
     def process_error(command, started_at, data, exit_code)
