@@ -24,6 +24,30 @@ module Herd
         run("test -w #{path}; echo $?").chomp == "0"
       end
 
+      def file_contains?(path, content)
+        return nil unless file_exists?(path)
+
+        read_file!(path, sudo: true)&.include?(content) || false
+      end
+
+      # Always appends \n to content — otherwise the prepended line merges with the first line of the file.
+      def prepend_to_file(path, content, sudo: false)
+        return if file_contains?(path, content)
+
+        content = "#{content}\n" unless content.end_with?("\n")
+
+        tmp = "/tmp/herd_prepend_#{Process.pid}"
+        write_to_file(tmp, content)
+        run("cat #{path} >> #{tmp}") unless file_contains?(path, content).nil?
+        run(sudo ? "sudo mv #{tmp} #{path}" : "mv #{tmp} #{path}")
+      end
+
+      def ensure_line_in_file(path, line, sudo: false)
+        return if file_contains?(path, line)
+
+        append_to_file(path, "#{line}\n", sudo: sudo)
+      end
+
       def dir(path, user, group)
         mkdir_p(path, user, group)
         source = "#{File.expand_path(File.join(FILES, path))}/"
