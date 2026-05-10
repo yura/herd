@@ -14,7 +14,8 @@ module Herd
         Thread.new { host.exec(command, &) }
       end
 
-      threads.each(&:join)
+      # rescue nil so a failed host doesn't prevent waiting for the rest
+      threads.each { |t| t.join rescue nil }
       threads.map(&:value)
     end
   end
