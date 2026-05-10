@@ -2,7 +2,7 @@
 
 source "https://rubygems.org"
 
-ruby "3.4.7"
+ruby "4.0.2"
 
 # Specify your gem's dependencies in herd.gemspec
 gemspec
