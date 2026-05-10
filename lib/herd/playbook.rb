@@ -11,8 +11,9 @@ module Herd
       @stages = []
       instance_exec(&block)
 
+      stages = @stages
       @runner.exec do
-        @stages.each { |name, args| send(name, *args) }
+        stages.each { |name, args| send(name, *args) }
       end
     end
 
