@@ -52,6 +52,10 @@ module Herd
       @working_dir = nil
     end
 
+    def info(message)
+      puts "[#{host.host}] #{message}"
+    end
+
     def respond_to_missing?(cmd)
       OS_COMMANDS.include?(cmd) || super
     end
