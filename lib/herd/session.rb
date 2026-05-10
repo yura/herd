@@ -98,6 +98,8 @@ module Herd
           if data.include?("[sudo] password for")
             c.send_data "#{password}\n"
           else
+            # strip ANSI escape codes produced by PTY before printing
+            print data.gsub(/\e\[[0-9;]*[A-Za-z]|\e./, "") if ENV["HERD_STREAM"]
             output = data
           end
         end
