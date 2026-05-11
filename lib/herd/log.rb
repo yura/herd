@@ -29,22 +29,30 @@ module Herd
       log.print({ error: error.message, error_trace: error.backtrace }.to_json)
     end
 
-    def log_command_start(timestamp, command)
+    def log_command_start(timestamp, command, caller_method = nil)
       log.puts(",")
-      log.print({ timestamp: time(timestamp), command: command }.to_json)
+      entry = { timestamp: time(timestamp) }
+      entry[:caller] = caller_method if caller_method
+      entry[:command] = command
+      log.print(entry.to_json)
     end
 
-    def log_command_output(command, output, started_at)
+    def log_command_output(command, output, started_at, caller_method = nil)
       now = Time.now
       log.puts(",")
-      log.print({ timestamp: time(now), command: command, output: output, time: now - started_at }.to_json)
+      entry = { timestamp: time(now) }
+      entry[:caller] = caller_method if caller_method
+      entry.merge!(command: command, output: output, time: now - started_at)
+      log.print(entry.to_json)
     end
 
-    def log_command_error(command, error, started_at, exit_code)
+    def log_command_error(command, error, started_at, exit_code, caller_method = nil)
       now = Time.now
       log.puts(",")
-      log.print({ timestamp: time(now), command: command, error: error, exit_code: exit_code,
-                  time: now - started_at }.to_json)
+      entry = { timestamp: time(now) }
+      entry[:caller] = caller_method if caller_method
+      entry.merge!(command: command, error: error, exit_code: exit_code, time: now - started_at)
+      log.print(entry.to_json)
     end
 
     def time(timestamp = Time.now)

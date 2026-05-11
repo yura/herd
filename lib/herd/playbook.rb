@@ -13,7 +13,10 @@ module Herd
 
       stages = @stages
       @runner.exec do
-        stages.each { |name, args| send(name, *args) }
+        stages.each do |name, args|
+          info("▶ #{name}")
+          send(name, *args)
+        end
       end
     end
 
