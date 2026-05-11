@@ -39,6 +39,12 @@ module Herd
       end
     rescue Herd::CommandError
       raise
+    rescue Net::SSH::ConnectionTimeout, Errno::ETIMEDOUT
+      raise Herd::CommandError, "cannot connect to #{user}@#{host}:#{port} — connection timed out"
+    rescue Errno::ECONNREFUSED
+      raise Herd::CommandError, "cannot connect to #{user}@#{host}:#{port} — connection refused"
+    rescue Net::SSH::AuthenticationFailed
+      raise Herd::CommandError, "cannot connect to #{user}@#{host}:#{port} — authentication failed"
     rescue StandardError => e
       log_connection_error(e)
       raise
