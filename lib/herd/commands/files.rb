@@ -123,6 +123,7 @@ module Herd
       end
 
       def write_to_file(path, content, sudo: false)
+        content = "#{content}\n" unless content.end_with?("\n")
         command = "tee"
         command = "sudo #{command}" if sudo
         run(%(#{command} #{path} << "EOF"
@@ -130,6 +131,7 @@ module Herd
       end
 
       def append_to_file(path, content, sudo: false)
+        content = "#{content}\n" unless content.end_with?("\n")
         command = "tee -a"
         command = "sudo #{command}" if sudo
         run(%(#{command} #{path} << "EOF"
