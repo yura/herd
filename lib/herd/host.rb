@@ -9,7 +9,8 @@ module Herd
   class Host
     include Herd::Log
 
-    attr_reader :host, :port, :user, :ssh_options, :password, :vars, :log
+    attr_reader :host, :port, :user, :ssh_options, :vars, :log
+    attr_accessor :password
 
     # port, private_key_path, password are for the ssh connection
     def initialize(host, user, options)

@@ -126,7 +126,7 @@ module Herd
         content = "#{content}\n" unless content.end_with?("\n")
         command = "tee"
         command = "sudo #{command}" if sudo
-        run(%(#{command} #{path} << "EOF"
+        run(%(#{command} #{path} > /dev/null << "EOF"
 #{content}EOF))
       end
 
