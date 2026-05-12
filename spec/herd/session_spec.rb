@@ -44,13 +44,13 @@ RSpec.describe Herd::Session do
     describe "#authorized_keys" do
       before do
         allow(mock_ssh_channel).to receive(:exec)
-          .with("set -o pipefail; test -a ~/.ssh/authorized_keys; echo $?")
+          .with("set -o pipefail; test -e ~/.ssh/authorized_keys && echo yes || echo no")
           .and_yield(mock_ssh_channel, nil)
         allow(mock_ssh_channel).to receive(:exec)
           .with("set -o pipefail; cat ~/.ssh/authorized_keys")
           .and_yield(mock_ssh_channel, nil)
 
-        responses = ["0", "key1\nkey2\n"]
+        responses = ["yes", "key1\nkey2\n"]
         allow(mock_ssh_channel).to receive(:on_data) { |&blk| blk.call(nil, responses.shift) }
       end
 

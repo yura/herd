@@ -13,15 +13,15 @@ module Herd
       class PermissionDeniedError < StandardError; end
 
       def file_exists?(path)
-        run("test -a #{path}; echo $?").chomp == "0"
+        run("test -e #{path} && echo yes || echo no").chomp == "yes"
       end
 
       def file_readable?(path)
-        run("test -r #{path}; echo $?").chomp == "0"
+        run("test -r #{path} && echo yes || echo no").chomp == "yes"
       end
 
       def file_writable?(path)
-        run("test -w #{path}; echo $?").chomp == "0"
+        run("test -w #{path} && echo yes || echo no").chomp == "yes"
       end
 
       def file_contains?(path, content)
