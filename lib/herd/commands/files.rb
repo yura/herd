@@ -39,6 +39,7 @@ module Herd
         tmp = "/tmp/herd_prepend_#{Process.pid}"
         write_to_file(tmp, content)
         run("cat #{path} >> #{tmp}") unless file_contains?(path, content).nil?
+        run("chmod --reference=#{path} #{tmp}") if file_exists?(path)
         run(sudo ? "sudo mv #{tmp} #{path}" : "mv #{tmp} #{path}")
       end
 
@@ -50,17 +51,27 @@ module Herd
 
       def dir(path, user, group)
         mkdir_p(path, user, group)
-        source = "#{File.expand_path(File.join(FILES, path))}/"
+        source      = "#{File.expand_path(File.join(FILES, path))}/"
         destination = "#{host.user}@#{host.host}:#{path}"
-        # --delete
-        params = "-rptqz --checksum --force -e \"ssh -p #{host.port}\""
+        params      = "-rptqz --checksum --force -e \"#{rsync_ssh_cmd}\""
 
         Rsync.run(source, destination, params) do |result|
-          # FIXME: raise some exception
-          puts result.error unless result.success?
+          raise Herd::CommandError, result.error unless result.success?
         end
 
         dir_user_and_group(path, user, group)
+      end
+
+      def upload_file(local_path, remote_path, user, group, mode: nil)
+        destination = "#{host.user}@#{host.host}:#{remote_path}"
+        params      = "-ptqz --checksum -e \"#{rsync_ssh_cmd}\""
+
+        Rsync.run(local_path, destination, params) do |result|
+          raise Herd::CommandError, result.error unless result.success?
+        end
+
+        file_user_and_group(remote_path, user, group)
+        file_permissions(remote_path, mode) if mode
       end
 
       def mkdir_p(path, user, group, sudo: false, mode: nil)
@@ -148,6 +159,12 @@ module Herd
 
       def file_permissions(path, mode)
         sudo("chmod #{mode} #{path}")
+      end
+
+      def rsync_ssh_cmd
+        cmd = "ssh -p #{host.port}"
+        cmd += " -J #{host.proxy_jump}" if host.proxy_jump
+        cmd
       end
 
       def diff(actual, required)

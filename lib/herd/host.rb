@@ -3,25 +3,32 @@
 require "csv"
 require "json"
 require "net/ssh"
+require "net/ssh/proxy/jump"
 
 module Herd
   # Target host
   class Host
     include Herd::Log
 
-    attr_reader :host, :port, :user, :ssh_options, :vars, :log
-    attr_accessor :password
+    attr_reader :host, :port, :user, :ssh_options, :vars, :log, :proxy_jump, :password
+
+    def password=(value)
+      @password = value
+      @ssh_options[:password] = value
+    end
 
     # port, private_key_path, password are for the ssh connection
     def initialize(host, user, options)
       @host = host
       @user = user
 
+      resolve_ssh_alias!(options) unless options[:port]
+
       create_ssh_options(options)
 
       @port = ssh_options[:port]
       @password = options.delete(:password)
-      @vars = options.merge(host: host, user: user, port: ssh_options[:port])
+      @vars = options.merge(host: @host, user: user, port: ssh_options[:port])
     end
 
     def create_ssh_options(options)
@@ -31,6 +38,26 @@ module Herd
       else
         @ssh_options[:password] = options[:password]
       end
+      if options[:proxy_jump]
+        @proxy_jump = options[:proxy_jump]
+        @ssh_options[:proxy] = Net::SSH::Proxy::Jump.new(@proxy_jump)
+      end
+    end
+
+    def resolve_ssh_alias!(options)
+      output = `ssh -G #{@host} 2>/dev/null`
+      return unless $?.success?
+
+      parsed = output.lines.each_with_object({}) do |line, h|
+        k, v = line.strip.split(" ", 2)
+        h[k] = v
+      end
+
+      @host          = parsed["hostname"] if parsed["hostname"]
+      options[:port] = parsed["port"].to_i if parsed["port"]
+
+      jump = parsed["proxyjump"]
+      options[:proxy_jump] = jump if jump && jump != "none"
     end
 
     def exec(command = nil, &)
