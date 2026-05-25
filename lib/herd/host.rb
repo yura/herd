@@ -60,6 +60,14 @@ module Herd
       options[:proxy_jump] = jump if jump && jump != "none"
     end
 
+    def method_missing(name, *args)
+      vars.key?(name) ? vars[name] : super
+    end
+
+    def respond_to_missing?(name, include_private = false)
+      vars.key?(name) || super
+    end
+
     def exec(command = nil, &)
       open_log
       Net::SSH.start(host, user, ssh_options) do |ssh|

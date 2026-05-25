@@ -8,12 +8,11 @@ module Herd
     OS_COMMANDS = %i[cat chmod echo hostname touch].freeze
     CUSTOM_COMMANDS_DIR = File.expand_path("commands", __dir__)
 
-    attr_reader :host, :ssh, :password, :log
+    attr_reader :host, :ssh, :log
 
-    def initialize(host, ssh, password, log)
+    def initialize(host, ssh, _password, log)
       @host = host
       @ssh = ssh
-      @password = password
       @log = log
     end
 
@@ -97,7 +96,7 @@ module Herd
       channel.exec("set -o pipefail; #{command}") do |c, _|
         c.on_data do |_, data|
           if data.include?("[sudo] password for")
-            c.send_data "#{password}\n"
+            c.send_data "#{host.password}\n"
           else
             # strip ANSI escape codes produced by PTY before printing
             print data.gsub(/\e\[[0-9;]*[A-Za-z]|\e./, "") if ENV["HERD_STREAM"]
