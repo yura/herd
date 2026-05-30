@@ -42,6 +42,7 @@ module Herd
         @proxy_jump = options[:proxy_jump]
         @ssh_options[:proxy] = Net::SSH::Proxy::Jump.new(@proxy_jump)
       end
+      @ssh_options[:verify_host_key] = options[:verify_host_key] if options[:verify_host_key]
     end
 
     def resolve_ssh_alias!(options)
@@ -58,6 +59,8 @@ module Herd
 
       jump = parsed["proxyjump"]
       options[:proxy_jump] = jump if jump && jump != "none"
+
+      options[:verify_host_key] = :never if %w[no false].include?(parsed["stricthostkeychecking"]&.downcase)
     end
 
     def method_missing(name, *args)
