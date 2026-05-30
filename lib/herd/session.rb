@@ -10,10 +10,15 @@ module Herd
 
     attr_reader :host, :ssh, :log
 
-    def initialize(host, ssh, _password, log)
+    def initialize(host, ssh, password, log)
       @host = host
       @ssh = ssh
+      @password = password
       @log = log
+    end
+
+    def password
+      host&.password || @password
     end
 
     def exec(command, vars, &)
