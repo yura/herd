@@ -38,4 +38,10 @@ Gem::Specification.new do |spec|
   spec.require_paths = ["lib"]
 
   spec.add_dependency "csv"
+  spec.add_dependency "logger"
+  spec.add_dependency "net-ssh"
+  spec.add_dependency "diff-lcs"
+  spec.add_dependency "rsync"
+  spec.add_dependency "ed25519"
+  spec.add_dependency "bcrypt_pbkdf"
 end

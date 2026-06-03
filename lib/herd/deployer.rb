@@ -4,9 +4,10 @@ module Herd
   class Deployer
     TRACKING_FILE = "~/.herd_deployed_commits"
 
-    def initialize(runner, app_path:, hooks_dir: nil)
+    def initialize(runner, app_path:, branch: "main", hooks_dir: nil)
       @runner   = runner
       @app_path = app_path
+      @branch   = branch
       @hooks    = {}
 
       if hooks_dir
@@ -20,23 +21,42 @@ module Herd
       @hooks[sha] = block
     end
 
-    def deploy(&after)
+    def deploy(pull: false, &after)
       hooks    = @hooks
       app_path = @app_path
       tracking = TRACKING_FILE
 
+      branch = @branch
+
       @runner.exec do
-        run("git -C #{app_path} pull")
+        within(app_path) do
+          current_branch = run("git rev-parse --abbrev-ref HEAD").strip
+          if current_branch != branch
+            info("warning: expected branch '#{branch}', got '#{current_branch}' — hooks will run against '#{branch}' commits")
+          end
+
+          if pull
+            dirty = run("git status --porcelain").strip
+            raise Herd::CommandError, "uncommitted changes on server, aborting deploy" unless dirty.empty?
+          end
+        end
+
+        run("git -C #{app_path} pull") if pull
 
         within(app_path) do
           applied = file_exists?(tracking) ? read_file(tracking).split(/\r?\n/).map(&:strip) : []
           unapplied = hooks.keys - applied
 
           if unapplied.any?
-            all_commits = run("git log --format=%H")
-                            .split(/\r?\n/).map(&:strip).reject(&:empty?)
+            check = run("printf '#{unapplied.join("\\n")}' | git cat-file --batch-check")
+                      .split(/\r?\n/).map(&:strip).reject(&:empty?)
 
-            pending = all_commits.reverse.select { |sha| unapplied.include?(sha) }
+            existing = check.select { |l| l.include?(" commit ") }
+                            .map    { |l| l.split.first }
+
+            pending = existing.sort_by { |sha|
+              run("git log -1 --format=%ct #{sha}").strip.to_i
+            }
 
             if pending.empty?
               info("no pending hooks found in git log")
