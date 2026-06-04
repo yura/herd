@@ -36,7 +36,17 @@ module Herd
       end
     end
 
-    def deploy(pull: false, &after)
+    def deploy(&after)
+      run_deploy(pull: true, &after)
+    end
+
+    def check_hooks(dry_run: true, &after)
+      run_deploy(pull: false, fix: !dry_run, &after)
+    end
+
+    private
+
+    def run_deploy(pull:, fix: true, &after)
       hooks    = @hooks
       app_path = @app_path
       tracking = @tracking
@@ -60,7 +70,7 @@ module Herd
         run("git -C #{app_path} pull") if pull
 
         within(app_path) do
-          applied = run("ls #{tracking} 2>/dev/null || true").scan(/[0-9a-f]{40}/)
+          applied   = run("ls #{tracking} 2>/dev/null || true").scan(/[0-9a-f]{40}/)
           unapplied = hooks.keys - applied
 
           if unapplied.any?
@@ -84,13 +94,19 @@ module Herd
                   next unless instance_exec(&hook.pre_conditions_block)
                 end
 
-                info("running hook for #{sha[0..7]}")
-                instance_exec(&hook.actions_block) if hook.actions_block
-                instance_exec(&hook.checks_block) if hook.checks_block
-                run("touch #{tracking}#{hook.name}")
-                info("hook applied: #{sha[0..7]}")
+                if fix
+                  info("running hook for #{sha[0..7]}")
+                  instance_exec(&hook.actions_block) if hook.actions_block
+                  instance_exec(&hook.checks_block) if hook.checks_block
+                  run("touch #{tracking}#{hook.name}")
+                  info("hook applied: #{sha[0..7]}")
+                else
+                  info("pending hook: #{hook.name}")
+                end
               end
             end
+          else
+            info("all hooks applied")
           end
 
           instance_exec(&after) if after
