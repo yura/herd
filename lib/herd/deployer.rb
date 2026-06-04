@@ -2,13 +2,14 @@
 
 module Herd
   class Deployer
-    TRACKING_FILE = "~/.herd_deployed_commits"
+    TRACKING_DIR = "~/.herd_deploy"
 
     def initialize(runner, app_path:, branch: "main", hooks_dir: nil)
       @runner   = runner
       @app_path = app_path
       @branch   = branch
       @hooks    = {}
+      @tracking = "#{TRACKING_DIR}/#{File.basename(app_path)}"
 
       if hooks_dir
         Dir[File.join(hooks_dir, "**/*.rb")].sort.each do |file|
@@ -24,11 +25,14 @@ module Herd
     def deploy(pull: false, &after)
       hooks    = @hooks
       app_path = @app_path
-      tracking = TRACKING_FILE
+      tracking = @tracking
+      tracking_dir = TRACKING_DIR
 
       branch = @branch
 
       @runner.exec do
+        run("mkdir -p #{tracking_dir}")
+
         within(app_path) do
           current_branch = run("git rev-parse --abbrev-ref HEAD").strip
           if current_branch != branch
