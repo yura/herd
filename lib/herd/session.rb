@@ -100,7 +100,8 @@ module Herd
       output, exit_code = nil
       channel.exec("set -o pipefail; #{command}") do |c, _|
         c.on_data do |_, data|
-          if data&.include?("[sudo] password for")
+          data_utf8 = data.dup.force_encoding("UTF-8")
+          if data_utf8.include?("[sudo] password for") || data_utf8.include?("[sudo] пароль для")
             c.send_data "#{password}\n"
           else
             # strip ANSI escape codes produced by PTY before printing
