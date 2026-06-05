@@ -35,9 +35,18 @@ module Herd
       run(command)
     end
 
+    def with_env(env)
+      @env = (@env || {}).merge(env)
+      yield
+    ensure
+      @env = nil
+    end
+
     def run(command)
       caller_method = caller_locations.find { |loc| !loc.path.include?("/lib/herd/") }&.label
-      full_command = @working_dir ? "cd #{@working_dir} && #{command}" : command
+      env_exports   = @env&.map { |k, v| "export #{k}=#{v}" }&.join("; ")
+      full_command  = @working_dir ? "cd #{@working_dir} && #{command}" : command
+      full_command  = "#{env_exports}; #{full_command}" if env_exports
       result = []
       ssh.open_channel do |channel|
         channel.request_pty do |ch, success|
