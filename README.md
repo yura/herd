@@ -16,20 +16,26 @@ Fast host configuration tool.
 * [ ] Bug: do not work with ssh config files
 * [ ] Ask password
 * [x] Does not raise an CommandError if there is an error in a command
-* [ ] Check file contains some string, eg `/home/elon/.bashrc` should contain `export EDITOR=vim`
+* [x] Check file contains some string — `file_contains?`
 * [ ] ANSI terminal
-* [ ] Parallel execution
-  * [ ] Add new parameter to "#exec". By default it will be :sequential execution, optionally :parallel
-        for parallel execution you can add `:depends_on` for child task and `:label` for parent one.
-  * [ ] for sequential execution you can add parallel block in any place
+* [x] Parallel execution — `Runner` via `Thread`
 * [ ] Interpret Dockerfile
-* [ ] Add user to group
+* [x] Add user to group — `user_add_to_group`
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
+Install from git until the gem is published to RubyGems:
 
-Install the gem and add to the application's Gemfile by executing:
+```ruby
+# Gemfile
+gem "herd-rb", git: "https://github.com/yura/herd.git", branch: "main", require: "herd"
+```
+
+```bash
+bundle install
+```
+
+Once published to RubyGems, install the gem and add to the application's Gemfile by executing:
 
 ```bash
 bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
@@ -43,117 +49,151 @@ gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
 
 ## Usage
 
-### Single host interactions
+### Single host
 
 ```ruby
-# instanciate new host with password
+# password auth
 host = Herd::Host.new("tesla.com", "elon", password: "T0pS3kr3t")
-# or with key
+# or key auth
 host = Herd::Host.new("tesla.com", "elon", private_key_path: "~/.ssh/id_ed25519")
 
-# run single command
+# run a single command
 host.exec("hostname")
-# or run block of commands
+
+# or run a block of commands
 host.exec do
-  hostname + uptime
+  h = hostname
+  info("connected to #{h}")
+  apt_update
+  apt_install("curl", "git")
 end
 ```
 
-### Multiple hosts interactions
+### Multiple hosts in parallel
 
 ```ruby
-another_host = Herd::Host.new("tesla.com", "elon", private_key_path: "~/.ssh/id_ed25519")
-runner = Runner.new([host, another_host])
+hosts = [
+  Herd::Host.new("web-01.example.com", "deploy", private_key_path: "~/.ssh/id_ed25519"),
+  Herd::Host.new("web-02.example.com", "deploy", private_key_path: "~/.ssh/id_ed25519"),
+]
 
-# run single command on all hosts in parallel
-runner.exec("hostname") # ["alpha001\n", "omega001\n"]
+runner = Herd::Runner.new(hosts)
 
-# or run block of commands on all hosts in parallel
-runner.exec { hostname + uptime } # ["alpha001\n2000 years\n", "omega001\2500 years\n"]
+# run a block of commands on all hosts in parallel
+runner.exec do
+  apt_update
+  apt_install("nginx")
+  systemctl_enable("nginx", now: true)
+end
 ```
 
-List of hosts can be loaded from the CSV file:
+Any Ruby logic works inside the block:
 
 ```ruby
-# hosts.csv
-host,port,user,password,some_param1,some_param2
-alpha.tesla.com,2022,elon,T0pS3kr3t,value1,value2
-omega.tesla.com,2023,elon,T0pS3kr3t2,value3,value4
+my_key = File.read("~/.ssh/id_ed25519.pub").chomp
+
+runner.exec do
+  keys = authorized_keys
+
+  if keys.include?(my_key)
+    info("key already present")
+  else
+    add_authorized_key(my_key)
+    info("key added")
+  end
+end
+```
+
+Hosts can also be loaded from a CSV file:
+
+```csv
+host,port,user,password
+alpha.tesla.com,2022,elon,T0pS3kr3t
+omega.tesla.com,2023,elon,T0pS3kr3t2
 ```
 
 ```ruby
 hosts = Herd::Host.from_csv("hosts.csv")
 runner = Herd::Runner.new(hosts)
-...
 ```
 
-### Something more complex
+### Playbook
+
+Named stages with optional filtering via CLI arguments:
 
 ```ruby
-public_key_path = File.expand_path("~/.ssh/id_ed25519.pub")
-my_key = File.read(public_key_path).chomp
-
-result = runner.exec do
-  h = hostname
-  keys = authorized_keys
-
-  if keys.include?(my_key)
-    puts "Key already in authorized_keys on host #{h}"
-  else
-    add_authorized_key my_key
-    puts "Added new key for host #{h}"
-  end
-end
-
-# or even simpler
-my_key2 = "ssh-ed25519 ..."
-
-result = runner.exec do
-  authorized_keys_contains_exactly([my_key, my_key2])
+Herd::Playbook.new(hosts).run do
+  packages_install
+  rbenv_install
+  nginx_install
 end
 ```
 
-### Files and directories
+```bash
+bundle exec ruby run.rb                        # all stages
+bundle exec ruby run.rb nginx_install          # single stage
+bundle exec ruby run.rb --from rbenv_install   # from stage onwards
+bundle exec ruby run.rb --except packages_install
+```
 
-Following example takes file from the `./files/etc/sudoers.d/50-elon`
-and copy content to the remote host with required permissions.
+### Deployer
+
+Handles commit-based one-off operations (migrations, data fixes) alongside regular deploys. Each hook runs exactly once per server, tracked in `~/.herd_deploy/<app>/`.
 
 ```ruby
-result = runner.exec do
-  file("/etc/sudoers.d/50-elon", "root", "root", 440)
+deployer = Herd::Deployer.new(hosts,
+  app_path:  "~/projects/myapp",
+  branch:    "main",
+  hooks_dir: "deploy/"
+)
 
-  # or copy dirs
-  dir("/home/elon/projects", "elon", "elon")
+deployer.deploy do
+  bundle("install")
+  systemctl_restart("puma")
+end
+```
+
+See [`examples/simple/deploy_app.rb`](examples/simple/deploy_app.rb) and [`examples/README.md`](examples/README.md) for full hook DSL and usage.
+
+### Files
+
+```ruby
+runner.exec do
+  # upload a local file from ./files/
+  file("/etc/sudoers.d/50-deploy", "root", "root", mode: "440")
+
+  write_to_file("/etc/myapp/config.yml", config_content, sudo: true)
+  ensure_line_in_file("~/.bashrc", 'export EDITOR=vim')
 end
 ```
 
 ### Templates
 
-Following example takes ERB template from the `./templates/home/elon/.env.erb`
-and renders using additional `Herd::Host` values and copies content to the remote host
-`/home/elon/.env`:
+ERB template from `./files/home/elon/.env.erb`:
 
 ```erb
-# File: ./templates/home/elon/.env.erb
 export ALIAS=<%= alias %>
 ```
 
 ```ruby
 host = Herd::Host.new("tesla.com", "elon", password: "T0pS3kr3t", alias: "alpha001")
-runner = Runner.new([host])
-runner.exec do |values|
-  # values contain named arguments (except password and public_key_path) 
-  # from the host constructor:
+Herd::Runner.new([host]).exec do
+  # host.vars contains all named arguments except password and private_key_path:
   # { host: "tesla.com", port: 22, user: "elon", alias: "alpha001" }
-  template("/home/elon/.env", "elon", "wheels", values: values)
+  template("/home/elon/.env", "elon", "elon", values: host.vars)
 end
 ```
 
 ### Crontab
 
 ```ruby
-crontab("* * * * * /some-script.sh")
+add_cron("0 3 * * * certbot renew --quiet")
 ```
+
+See also the [examples/](examples/simple/) directory:
+- [`bootstrap.rb`](examples/simple/bootstrap.rb) — first-time server setup
+- [`multi_server.rb`](examples/simple/multi_server.rb) — Playbook across multiple servers
+- [`deploy_app.rb`](examples/simple/deploy_app.rb) — deploying a Rails app with Deployer
 
 ### Logs
 Herd logs all commands, outputs and errors into the `log/<host>_<port>_<user>/<timestamp>.json` files:
