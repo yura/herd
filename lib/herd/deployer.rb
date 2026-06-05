@@ -17,8 +17,8 @@ module Herd
       def checks(&block)         = @checks_block         = block
     end
 
-    def initialize(runner, app_path:, branch: "main", hooks_dir: nil)
-      @runner   = runner
+    def initialize(hosts_or_runner, app_path:, branch: "main", hooks_dir: nil)
+      @runner   = hosts_or_runner.is_a?(Runner) ? hosts_or_runner : Runner.new(hosts_or_runner)
       @app_path = app_path
       @branch   = branch
       @hooks    = {}

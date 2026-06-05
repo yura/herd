@@ -2,8 +2,8 @@
 
 module Herd
   class Playbook
-    def initialize(runner)
-      @runner = runner
+    def initialize(hosts_or_runner)
+      @runner = hosts_or_runner.is_a?(Runner) ? hosts_or_runner : Runner.new(hosts_or_runner)
     end
 
     def run(only: nil, &block)
