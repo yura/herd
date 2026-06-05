@@ -27,7 +27,8 @@ host.exec do
   set_hostname(HOSTNAME)
 
   # Essentials
-  install_packages(%w[curl git vim htop ufw unattended-upgrades])
+  apt_update
+  apt_install("curl", "git", "vim", "htop", "ufw", "unattended-upgrades")
 
   info("bootstrap complete — connect as deploy with your SSH key")
 end

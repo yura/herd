@@ -92,30 +92,4 @@ RSpec.describe Herd::Session do
     end
   end
 
-  context "with Packages commands" do
-    it "preprends packages helpers" do
-      expect(described_class.ancestors).to include(Herd::Commands::Packages)
-    end
-
-    describe "#install_packages" do
-      let(:command) { %(set -o pipefail; echo -e 'T0pS3kr3t\n' | sudo -S apt install -qq -y openssh-server) }
-
-      before do
-        allow(mock_ssh_channel).to receive(:exec).with(command).and_yield(mock_ssh_channel, nil)
-        allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "Done\n")
-      end
-
-      it "ssh channel receives the command" do
-        session.install_packages("openssh-server")
-
-        expect(mock_ssh_channel).to have_received(:exec).with(command)
-      end
-
-      it "installs packages" do
-        session.install_packages("openssh-server")
-
-        expect(mock_ssh_channel).to have_received(:on_data)
-      end
-    end
-  end
 end

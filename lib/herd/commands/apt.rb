@@ -12,8 +12,9 @@ module Herd
       end
 
       def apt_install(*packages, confnew: false)
-        opts = confnew ? "-o Dpkg::Options::='--force-confnew'" : ""
-        sudo("DEBIAN_FRONTEND=noninteractive apt install -qq -y #{opts} #{packages.flatten.join(' ')}".strip)
+        opts = confnew ? "-o Dpkg::Options::='--force-confnew'" : nil
+        parts = ["DEBIAN_FRONTEND=noninteractive apt install -qq -y", opts, packages.flatten.join(" ")].compact
+        sudo(parts.join(" "))
       end
 
       def apt_remove(*packages)
