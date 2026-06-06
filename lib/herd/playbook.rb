@@ -6,14 +6,14 @@ module Herd
       @runner = hosts_or_runner.is_a?(Runner) ? hosts_or_runner : Runner.new(hosts_or_runner)
     end
 
-    def run(**opts, &block)
+    def run(**opts, &)
       opts = self.class.parse_argv(ARGV) if opts.empty?
       only   = opts[:only]
       from   = opts[:from]
       except = opts[:except]
       @only = only&.to_sym
       @stages = []
-      instance_exec(&block)
+      instance_exec(&)
 
       stages    = @stages
       skip_from = from&.to_sym
@@ -25,6 +25,7 @@ module Herd
           skipping = false if skipping && name.to_sym == skip_from
           next if skipping
           next if excluded.include?(name.to_sym)
+
           info("▶ #{name}")
           send(name, *args, **kwargs)
         end

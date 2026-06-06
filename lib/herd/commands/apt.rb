@@ -18,7 +18,7 @@ module Herd
       end
 
       def apt_remove(*packages)
-        sudo("apt remove -qq -y #{packages.flatten.join(' ')}")
+        sudo("apt remove -qq -y #{packages.flatten.join(" ")}")
       end
 
       def apt_autoremove

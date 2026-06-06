@@ -4,11 +4,11 @@ module Herd
   module Commands
     module Systemd
       def systemctl_enable(service, now: false)
-        sudo("systemctl enable#{now ? " --now" : ""} #{service}")
+        sudo("systemctl enable#{" --now" if now} #{service}")
       end
 
       def systemctl_disable(service, now: false)
-        sudo("systemctl disable#{now ? " --now" : ""} #{service}")
+        sudo("systemctl disable#{" --now" if now} #{service}")
       end
 
       def systemctl_start(service)

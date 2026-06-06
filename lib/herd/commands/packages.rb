@@ -4,9 +4,9 @@ module Herd
   module Commands
     # Abstraction over OS package managers — delegates to apt, yum, etc. based on the detected system
     module Packages
-      def package_install(*packages, **opts)
+      def package_install(*packages, **)
         case package_manager
-        when :apt then apt_install(*packages, **opts)
+        when :apt then apt_install(*packages, **)
         else raise "unsupported package manager: #{package_manager}"
         end
       end

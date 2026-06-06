@@ -27,7 +27,8 @@ RSpec.describe Herd::Host do
   describe "#exec" do
     it "starts SSH session" do
       host.exec("hostname")
-      expect(Net::SSH).to have_received(:start).with("tesla.com", "elon", hash_including(password: "T0pS3kr3t", port: 22, timeout: 10))
+      expect(Net::SSH).to have_received(:start).with("tesla.com", "elon",
+                                                     hash_including(password: "T0pS3kr3t", port: 22, timeout: 10))
     end
 
     it "delegates calls to the SSH session" do

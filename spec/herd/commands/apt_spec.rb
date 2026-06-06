@@ -12,7 +12,7 @@ RSpec.describe Herd::Commands::Apt do
     allow(mock_ssh_channel).to receive(:request_pty).and_yield(mock_ssh_channel, true)
     allow(mock_ssh_channel).to receive(:on_extended_data)
     allow(mock_ssh_channel).to receive(:on_request).with("exit-status")
-      .and_yield(nil, instance_double(Net::SSH::Buffer, read_long: 0))
+                                                   .and_yield(nil, instance_double(Net::SSH::Buffer, read_long: 0))
   end
 
   def stub_command(cmd)

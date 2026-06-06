@@ -13,8 +13,8 @@ module Herd
       end
 
       def pre_conditions(&block) = @pre_conditions_block = block
-      def actions(&block)        = @actions_block        = block
-      def checks(&block)         = @checks_block         = block
+      def actions(&block)        = @actions_block = block
+      def checks(&block)         = @checks_block = block
     end
 
     def initialize(hosts_or_runner, app_path:, branch: "main", hooks_dir: nil)
@@ -24,20 +24,20 @@ module Herd
       @hooks    = {}
       @tracking = "#{TRACKING_DIR}/#{File.basename(app_path)}/"
 
-      if hooks_dir
-        Dir[File.join(hooks_dir, "*.rb")].sort.each do |file|
-          sha = File.basename(file).split("_").first
-          next unless sha.match?(/\A[0-9a-f]{40}\z/)
+      return unless hooks_dir
 
-          hook = Hook.new(sha, File.basename(file, ".rb"))
-          hook.instance_eval(File.read(file), file)
-          @hooks[sha] = hook
-        end
+      Dir[File.join(hooks_dir, "*.rb")].each do |file|
+        sha = File.basename(file).split("_").first
+        next unless sha.match?(/\A[0-9a-f]{40}\z/)
+
+        hook = Hook.new(sha, File.basename(file, ".rb"))
+        hook.instance_eval(File.read(file), file)
+        @hooks[sha] = hook
       end
     end
 
-    def deploy(&after)
-      run_deploy(pull: true, &after)
+    def deploy(&)
+      run_deploy(pull: true, &)
     end
 
     def check_hooks(dry_run: true, &after)
@@ -75,14 +75,14 @@ module Herd
 
           if unapplied.any?
             check = run("printf '#{unapplied.join("\\n")}' | git cat-file --batch-check")
-                      .split(/\r?\n/).map(&:strip).reject(&:empty?)
+                    .split(/\r?\n/).map(&:strip).reject(&:empty?)
 
             existing = check.select { |l| l.include?(" commit ") }
                             .map    { |l| l.split.first }
 
-            pending = existing.sort_by { |sha|
+            pending = existing.sort_by do |sha|
               run("git log -1 --format=%ct #{sha}").strip.to_i
-            }
+            end
 
             if pending.empty?
               info("no pending hooks found in git log")
@@ -90,9 +90,7 @@ module Herd
               pending.each do |sha|
                 hook = hooks[sha]
 
-                if hook.pre_conditions_block
-                  next unless instance_exec(&hook.pre_conditions_block)
-                end
+                next if hook.pre_conditions_block && !instance_exec(&hook.pre_conditions_block)
 
                 if fix
                   info("running hook for #{sha[0..7]}")

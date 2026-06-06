@@ -51,7 +51,7 @@ RSpec.describe Herd::Session do
           .and_yield(mock_ssh_channel, nil)
 
         responses = ["yes", "key1\nkey2\n"]
-        allow(mock_ssh_channel).to receive(:on_data) { |&blk| blk.call(nil, responses.shift) }
+        allow(mock_ssh_channel).to receive(:on_data) { |&blk| blk.call(nil, responses.shift) } # rubocop:disable RSpec/Yield
       end
 
       it "returns list of remote authorized keys" do
@@ -91,5 +91,4 @@ RSpec.describe Herd::Session do
       end
     end
   end
-
 end

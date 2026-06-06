@@ -37,7 +37,6 @@ module Herd
       @ssh_options = { port: 22, timeout: 10 }.merge(cfg)
       @ssh_options[:port] = options[:port] if options[:port]
 
-
       if options[:private_key_path]
         @ssh_options[:keys] = [options.delete(:private_key_path)]
       elsif options[:password]

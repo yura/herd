@@ -91,9 +91,7 @@ module Herd
           run("mkdir -p #{path}")
         end
 
-        if user && group
-          file_user_and_group(path, user, group)
-        end
+        file_user_and_group(path, user, group) if user && group
         file_permissions(path, mode) if mode
       end
 

@@ -98,7 +98,7 @@ module Herd
         Herd::Commands.constants
                       .sort
                       .map { |const_name| Herd::Commands.const_get(const_name) }
-                      .select { |value| value.is_a?(Module) }
+                      .grep(Module)
       end
     end
 
@@ -139,7 +139,7 @@ module Herd
       end
     end
 
-    def process_success(channel, command, started_at, data, result, caller_method = nil)
+    def process_success(_channel, command, started_at, data, result, caller_method = nil)
       log_command_output(command, data, started_at, caller_method)
       result << data
     end
