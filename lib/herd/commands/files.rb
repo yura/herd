@@ -87,7 +87,7 @@ module Herd
 
       def mkdir_p(path, user, group, sudo: false, mode: nil)
         if sudo
-          run("sudo mkdir -p #{path}")
+          sudo("mkdir -p #{path}")
         else
           run("mkdir -p #{path}")
         end

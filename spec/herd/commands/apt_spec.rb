@@ -28,65 +28,65 @@ RSpec.describe Herd::Commands::Apt do
 
   describe "#apt_update" do
     it "runs apt update" do
-      stub_command("sudo apt update -qq")
+      stub_command("sudo -p 'HERD_SUDO: ' apt update -qq")
       session.apt_update
-      expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; sudo apt update -qq")
+      expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; sudo -p 'HERD_SUDO: ' apt update -qq")
     end
   end
 
   describe "#apt_upgrade" do
     it "runs apt upgrade non-interactively" do
-      stub_command("sudo DEBIAN_FRONTEND=noninteractive apt upgrade -qq -y")
+      stub_command("sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt upgrade -qq -y")
       session.apt_upgrade
       expect(mock_ssh_channel).to have_received(:exec)
-        .with("set -o pipefail; sudo DEBIAN_FRONTEND=noninteractive apt upgrade -qq -y")
+        .with("set -o pipefail; sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt upgrade -qq -y")
     end
   end
 
   describe "#apt_install" do
     it "installs a single package" do
-      stub_command("sudo DEBIAN_FRONTEND=noninteractive apt install -qq -y curl")
+      stub_command("sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl")
       session.apt_install("curl")
       expect(mock_ssh_channel).to have_received(:exec)
-        .with("set -o pipefail; sudo DEBIAN_FRONTEND=noninteractive apt install -qq -y curl")
+        .with("set -o pipefail; sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl")
     end
 
     it "installs multiple packages" do
-      stub_command("sudo DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git vim")
+      stub_command("sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git vim")
       session.apt_install("curl", "git", "vim")
       expect(mock_ssh_channel).to have_received(:exec)
-        .with("set -o pipefail; sudo DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git vim")
+        .with("set -o pipefail; sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git vim")
     end
 
     it "accepts an array of packages" do
-      stub_command("sudo DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git")
+      stub_command("sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git")
       session.apt_install(%w[curl git])
       expect(mock_ssh_channel).to have_received(:exec)
-        .with("set -o pipefail; sudo DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git")
+        .with("set -o pipefail; sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git")
     end
 
     it "adds --force-confnew when confnew: true" do
-      stub_command("sudo DEBIAN_FRONTEND=noninteractive apt install -qq -y -o Dpkg::Options::='--force-confnew' postgresql-16")
+      stub_command("sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y -o Dpkg::Options::='--force-confnew' postgresql-16")
       session.apt_install("postgresql-16", confnew: true)
       expect(mock_ssh_channel).to have_received(:exec)
-        .with("set -o pipefail; sudo DEBIAN_FRONTEND=noninteractive apt install -qq -y -o Dpkg::Options::='--force-confnew' postgresql-16")
+        .with("set -o pipefail; sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y -o Dpkg::Options::='--force-confnew' postgresql-16")
     end
   end
 
   describe "#apt_remove" do
     it "removes packages" do
-      stub_command("sudo apt remove -qq -y curl")
+      stub_command("sudo -p 'HERD_SUDO: ' apt remove -qq -y curl")
       session.apt_remove("curl")
       expect(mock_ssh_channel).to have_received(:exec)
-        .with("set -o pipefail; sudo apt remove -qq -y curl")
+        .with("set -o pipefail; sudo -p 'HERD_SUDO: ' apt remove -qq -y curl")
     end
   end
 
   describe "#apt_autoremove" do
     it "runs apt autoremove" do
-      stub_command("sudo apt autoremove -qq -y")
+      stub_command("sudo -p 'HERD_SUDO: ' apt autoremove -qq -y")
       session.apt_autoremove
-      expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; sudo apt autoremove -qq -y")
+      expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; sudo -p 'HERD_SUDO: ' apt autoremove -qq -y")
     end
   end
 

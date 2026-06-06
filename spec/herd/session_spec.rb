@@ -65,7 +65,7 @@ RSpec.describe Herd::Session do
       before do
         allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; touch ~/.ssh/authorized_keys")
                                                  .and_yield(mock_ssh_channel, nil)
-        allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; sudo chmod 600 ~/.ssh/authorized_keys")
+        allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; sudo -p 'HERD_SUDO: ' chmod 600 ~/.ssh/authorized_keys")
                                                  .and_yield(mock_ssh_channel, nil)
         allow(mock_ssh_channel).to \
           receive(:exec).with("set -o pipefail; tee -a ~/.ssh/authorized_keys << \"EOF\"\n#{public_key}\nEOF")
@@ -81,7 +81,7 @@ RSpec.describe Herd::Session do
       it "sets strict permissions on authorized keys file" do
         session.add_authorized_key(public_key)
 
-        expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; sudo chmod 600 ~/.ssh/authorized_keys")
+        expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; sudo -p 'HERD_SUDO: ' chmod 600 ~/.ssh/authorized_keys")
       end
 
       it "appends the key into authorized keys file" do
