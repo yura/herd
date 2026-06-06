@@ -18,11 +18,12 @@ module Herd
     end
 
     def initialize(hosts_or_runner, app_path:, branch: "main", hooks_dir: nil)
-      @runner   = hosts_or_runner.is_a?(Runner) ? hosts_or_runner : Runner.new(hosts_or_runner)
-      @app_path = app_path
-      @branch   = branch
-      @hooks    = {}
-      @tracking = "#{TRACKING_DIR}/#{File.basename(app_path)}/"
+      @runner      = hosts_or_runner.is_a?(Runner) ? hosts_or_runner : Runner.new(hosts_or_runner)
+      @app_path    = app_path
+      @branch      = branch
+      @hooks       = {}
+      @tracking    = "#{TRACKING_DIR}/#{File.basename(app_path)}/"
+      @check_block = nil
 
       return unless hooks_dir
 
@@ -36,6 +37,10 @@ module Herd
       end
     end
 
+    def check(&block)
+      @check_block = block
+    end
+
     def deploy(&)
       run_deploy(pull: true, &)
     end
@@ -47,10 +52,11 @@ module Herd
     private
 
     def run_deploy(pull:, fix: true, &after)
-      hooks    = @hooks
-      app_path = @app_path
-      tracking = @tracking
-      branch   = @branch
+      hooks       = @hooks
+      app_path    = @app_path
+      tracking    = @tracking
+      branch      = @branch
+      check_block = @check_block
 
       @runner.exec do
         run("mkdir -p #{tracking}")
@@ -108,6 +114,12 @@ module Herd
           end
 
           instance_exec(&after) if after
+        end
+      ensure
+        begin
+          instance_exec(&check_block) if check_block
+        rescue => e
+          info("check failed: #{e.message}")
         end
       end
     end
