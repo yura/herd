@@ -28,8 +28,9 @@ module Herd
         run("test -L #{path} && echo yes || echo no").chomp == "yes"
       end
 
+      # Returns nil if the file doesn't exist, false if it exists but doesn't contain content, true if it does.
       def file_contains?(path, content)
-        return nil unless file_exists?(path)
+        return nil unless file_exists?(path) # rubocop:disable Style/ReturnNilInPredicateMethodDefinition
 
         read_file!(path, sudo: true)&.include?(content) || false
       end
