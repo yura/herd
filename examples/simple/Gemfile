@@ -1,0 +1,3 @@
+source "https://rubygems.org"
+
+gem "herd-rb", github: "yura/herd", branch: "main"

@@ -2,7 +2,7 @@
 
 source "https://rubygems.org"
 
-ruby "3.4.7"
+ruby "4.0.2"
 
 # Specify your gem's dependencies in herd.gemspec
 gemspec
@@ -12,6 +12,7 @@ gem "rake", "~> 13.0"
 
 gem "bcrypt_pbkdf", "~> 1.1"
 gem "csv"
+gem "logger"
 gem "diff-lcs"
 gem "ed25519", "~> 1.4"
 gem "erb"

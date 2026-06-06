@@ -5,6 +5,7 @@ require_relative "herd/log"
 require_relative "herd/host"
 require_relative "herd/runner"
 require_relative "herd/session"
+require_relative "herd/playbook"
 
 module Herd
   class CommandError < StandardError; end

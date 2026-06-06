@@ -43,9 +43,15 @@ RSpec.describe Herd::Session do
 
     describe "#authorized_keys" do
       before do
-        allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; cat ~/.ssh/authorized_keys")
-                                                 .and_yield(mock_ssh_channel, nil)
-        allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "key1\nkey2\n")
+        allow(mock_ssh_channel).to receive(:exec)
+          .with("set -o pipefail; test -e ~/.ssh/authorized_keys && echo yes || echo no")
+          .and_yield(mock_ssh_channel, nil)
+        allow(mock_ssh_channel).to receive(:exec)
+          .with("set -o pipefail; cat ~/.ssh/authorized_keys")
+          .and_yield(mock_ssh_channel, nil)
+
+        responses = ["yes", "key1\nkey2\n"]
+        allow(mock_ssh_channel).to receive(:on_data) { |&blk| blk.call(nil, responses.shift) }
       end
 
       it "returns list of remote authorized keys" do
@@ -62,7 +68,7 @@ RSpec.describe Herd::Session do
         allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; sudo chmod 600 ~/.ssh/authorized_keys")
                                                  .and_yield(mock_ssh_channel, nil)
         allow(mock_ssh_channel).to \
-          receive(:exec).with("set -o pipefail; tee -a ~/.ssh/authorized_keys << \"EOF\"\n#{public_key}EOF")
+          receive(:exec).with("set -o pipefail; tee -a ~/.ssh/authorized_keys << \"EOF\"\n#{public_key}\nEOF")
                         .and_yield(mock_ssh_channel, nil)
       end
 
@@ -80,7 +86,7 @@ RSpec.describe Herd::Session do
 
       it "appends the key into authorized keys file" do
         session.add_authorized_key(public_key)
-        command = "set -o pipefail; tee -a ~/.ssh/authorized_keys << \"EOF\"\n#{public_key}EOF"
+        command = "set -o pipefail; tee -a ~/.ssh/authorized_keys << \"EOF\"\n#{public_key}\nEOF"
         expect(mock_ssh_channel).to have_received(:exec).with(command)
       end
     end

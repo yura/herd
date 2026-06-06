@@ -8,13 +8,17 @@ module Herd
     OS_COMMANDS = %i[cat chmod echo hostname touch].freeze
     CUSTOM_COMMANDS_DIR = File.expand_path("commands", __dir__)
 
-    attr_reader :host, :ssh, :password, :log
+    attr_reader :host, :ssh, :log
 
     def initialize(host, ssh, password, log)
       @host = host
       @ssh = ssh
       @password = password
       @log = log
+    end
+
+    def password
+      host&.password || @password
     end
 
     def exec(command, vars, &)
@@ -32,16 +36,29 @@ module Herd
     end
 
     def run(command)
+      caller_method = caller_locations.find { |loc| !loc.path.include?("/lib/herd/") }&.label
+      full_command = @working_dir ? "cd #{@working_dir} && #{command}" : command
       result = []
       ssh.open_channel do |channel|
         channel.request_pty do |ch, success|
           raise ::Herd::CommandError, "could not obtain pty" unless success
 
-          channel_run(ch, command, result, Time.now)
+          channel_run(ch, full_command, result, Time.now, caller_method)
         end
       end
       ssh.loop
       result.join
+    end
+
+    def within(path)
+      @working_dir = path
+      yield
+    ensure
+      @working_dir = nil
+    end
+
+    def info(message)
+      puts "[#{host.host}] #{message}"
     end
 
     def respond_to_missing?(cmd)
@@ -77,12 +94,20 @@ module Herd
 
     private
 
-    def channel_run(channel, command, result, started_at)
-      log_command_start(started_at, command)
+    def channel_run(channel, command, result, started_at, caller_method = nil)
+      log_command_start(started_at, command, caller_method)
 
       output, exit_code = nil
       channel.exec("set -o pipefail; #{command}") do |c, _|
-        c.on_data { |_, data| output = data }
+        c.on_data do |_, data|
+          if data.include?("[sudo] password for")
+            c.send_data "#{host.password}\n"
+          else
+            # strip ANSI escape codes produced by PTY before printing
+            print data.gsub(/\e\[[0-9;]*[A-Za-z]|\e./, "") if ENV["HERD_STREAM"]
+            output = output.to_s + data.encode("UTF-8", "BINARY", invalid: :replace, undef: :replace)
+          end
+        end
         c.on_extended_data { |_, _, data| output = data }
         c.on_request("exit-status") { |_, data| exit_code = data.read_long }
       end
@@ -90,30 +115,26 @@ module Herd
       ssh.loop { exit_code.nil? }
 
       output_with_code = { output: output, exit_code: exit_code }
-      process_output(channel, command, started_at, output_with_code, result)
+      process_output(channel, command, started_at, output_with_code, result, caller_method)
     end
 
-    def process_output(channel, command, started_at, output_with_code, result)
+    def process_output(channel, command, started_at, output_with_code, result, caller_method = nil)
       output = output_with_code[:output]
       exit_code = output_with_code[:exit_code]
       if exit_code.zero?
-        process_success(channel, command, started_at, output, result)
+        process_success(channel, command, started_at, output, result, caller_method)
       else
-        process_error(command, started_at, output, exit_code)
+        process_error(command, started_at, output, exit_code, caller_method)
       end
     end
 
-    def process_success(channel, command, started_at, data, result)
-      if data&.include?("[sudo] password for")
-        channel.send_data "#{password}\n"
-      else
-        log_command_output(command, data, started_at)
-        result << data
-      end
+    def process_success(channel, command, started_at, data, result, caller_method = nil)
+      log_command_output(command, data, started_at, caller_method)
+      result << data
     end
 
-    def process_error(command, started_at, data, exit_code)
-      log_command_error(command, data, started_at, exit_code)
+    def process_error(command, started_at, data, exit_code, caller_method = nil)
+      log_command_error(command, data, started_at, exit_code, caller_method)
       raise ::Herd::CommandError, [data, exit_code]
     end
   end

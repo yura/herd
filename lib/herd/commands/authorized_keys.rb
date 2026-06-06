@@ -15,11 +15,14 @@ module Herd
       end
 
       def authorized_keys
+        return [] unless file_exists?(AUTHORIZED_KEYS_FILE)
+
         read_file(AUTHORIZED_KEYS_FILE)&.split(/\r\n|\r|\n/) || []
       end
 
       def authorized_keys=(keys)
-        touch(AUTHORIZED_KEYS_FILE)
+        run("mkdir -p ~/.ssh")
+        file_permissions("~/.ssh", 700)
         write_to_file(AUTHORIZED_KEYS_FILE, [keys].flatten.join("\n"))
         file_permissions(AUTHORIZED_KEYS_FILE, 600)
       end

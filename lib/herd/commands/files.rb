@@ -13,30 +13,65 @@ module Herd
       class PermissionDeniedError < StandardError; end
 
       def file_exists?(path)
-        run("test -a #{path}; echo $?").chomp == "0"
+        run("test -e #{path} && echo yes || echo no").chomp == "yes"
       end
 
       def file_readable?(path)
-        run("test -r #{path}; echo $?").chomp == "0"
+        run("test -r #{path} && echo yes || echo no").chomp == "yes"
       end
 
       def file_writable?(path)
-        run("test -w #{path}; echo $?").chomp == "0"
+        run("test -w #{path} && echo yes || echo no").chomp == "yes"
+      end
+
+      def file_contains?(path, content)
+        return nil unless file_exists?(path)
+
+        read_file!(path, sudo: true)&.include?(content) || false
+      end
+
+      # Always appends \n to content — otherwise the prepended line merges with the first line of the file.
+      def prepend_to_file(path, content, sudo: false)
+        return if file_contains?(path, content)
+
+        content = "#{content}\n" unless content.end_with?("\n")
+
+        tmp = "/tmp/herd_prepend_#{Process.pid}"
+        write_to_file(tmp, content)
+        run("cat #{path} >> #{tmp}") unless file_contains?(path, content).nil?
+        run("chmod --reference=#{path} #{tmp}") if file_exists?(path)
+        run(sudo ? "sudo mv #{tmp} #{path}" : "mv #{tmp} #{path}")
+      end
+
+      def ensure_line_in_file(path, line, sudo: false)
+        return if file_contains?(path, line)
+
+        append_to_file(path, "#{line}\n", sudo: sudo)
       end
 
       def dir(path, user, group)
         mkdir_p(path, user, group)
-        source = "#{File.expand_path(File.join(FILES, path))}/"
+        source      = "#{File.expand_path(File.join(FILES, path))}/"
         destination = "#{host.user}@#{host.host}:#{path}"
-        # --delete
-        params = "-rptqz --checksum --force -e \"ssh -p #{host.port}\""
+        params      = "-rptqz --checksum --force -e \"#{rsync_ssh_cmd}\""
 
         Rsync.run(source, destination, params) do |result|
-          # FIXME: raise some exception
-          puts result.error unless result.success?
+          raise Herd::CommandError, result.error unless result.success?
         end
 
         dir_user_and_group(path, user, group)
+      end
+
+      def upload_file(local_path, remote_path, user, group, mode: nil)
+        destination = "#{host.user}@#{host.host}:#{remote_path}"
+        params      = "-ptqz --checksum -e \"#{rsync_ssh_cmd}\""
+
+        Rsync.run(local_path, destination, params) do |result|
+          raise Herd::CommandError, result.error unless result.success?
+        end
+
+        file_user_and_group(remote_path, user, group)
+        file_permissions(remote_path, mode) if mode
       end
 
       def mkdir_p(path, user, group, sudo: false, mode: nil)
@@ -99,13 +134,15 @@ module Herd
       end
 
       def write_to_file(path, content, sudo: false)
+        content = "#{content}\n" unless content.end_with?("\n")
         command = "tee"
         command = "sudo #{command}" if sudo
-        run(%(#{command} #{path} << "EOF"
+        run(%(#{command} #{path} > /dev/null << "EOF"
 #{content}EOF))
       end
 
       def append_to_file(path, content, sudo: false)
+        content = "#{content}\n" unless content.end_with?("\n")
         command = "tee -a"
         command = "sudo #{command}" if sudo
         run(%(#{command} #{path} << "EOF"
@@ -122,6 +159,12 @@ module Herd
 
       def file_permissions(path, mode)
         sudo("chmod #{mode} #{path}")
+      end
+
+      def rsync_ssh_cmd
+        cmd = "ssh -p #{host.port}"
+        cmd += " -J #{host.proxy_jump}" if host.proxy_jump
+        cmd
       end
 
       def diff(actual, required)
