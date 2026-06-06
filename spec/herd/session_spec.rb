@@ -6,7 +6,7 @@ RSpec.describe Herd::Session do
   let(:session) { described_class.new(nil, mock_ssh_session, "T0pS3kr3t", mock_log) }
   let(:mock_ssh_session) { instance_double(Net::SSH::Connection::Session) }
   let(:mock_ssh_channel) { instance_double(Net::SSH::Connection::Channel) }
-  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil) }
+  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil, flush: nil) }
 
   before do
     allow(mock_ssh_session).to receive(:open_channel).and_yield(mock_ssh_channel)

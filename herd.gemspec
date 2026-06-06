@@ -44,4 +44,7 @@ Gem::Specification.new do |spec|
   spec.add_dependency "rsync"
   spec.add_dependency "ed25519"
   spec.add_dependency "bcrypt_pbkdf"
+
+  # For more information and examples about making a new gem, check out our
+  # guide at: https://bundler.io/guides/creating_gem.html
 end

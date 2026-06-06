@@ -6,7 +6,7 @@ RSpec.describe Herd::Host do
   let(:host) { described_class.new("tesla.com", "elon", password: "T0pS3kr3t") }
   let(:mock_ssh_session) { instance_double(Net::SSH::Connection::Session) }
   let(:mock_ssh_channel) { instance_double(Net::SSH::Connection::Channel) }
-  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil) }
+  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil, flush: nil) }
 
   before do
     allow(Net::SSH).to receive(:start).and_yield(mock_ssh_session)
@@ -27,7 +27,7 @@ RSpec.describe Herd::Host do
   describe "#exec" do
     it "starts SSH session" do
       host.exec("hostname")
-      expect(Net::SSH).to have_received(:start).with("tesla.com", "elon", password: "T0pS3kr3t", port: 22, timeout: 10)
+      expect(Net::SSH).to have_received(:start).with("tesla.com", "elon", hash_including(password: "T0pS3kr3t", port: 22, timeout: 10))
     end
 
     it "delegates calls to the SSH session" do

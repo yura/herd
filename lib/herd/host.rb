@@ -22,8 +22,6 @@ module Herd
       @host = host
       @user = user
 
-      resolve_ssh_alias!(options) unless options[:port]
-
       create_ssh_options(options)
 
       @port = ssh_options[:port]
@@ -34,51 +32,26 @@ module Herd
     def create_ssh_options(options)
       cfg = Net::SSH::Config.for(@host)
 
-      keys = %i[
-        user
-        port
-        keys
-        proxy
-        proxy_jump
-        hostname
-      ]
+      @host = cfg.delete(:host_name) if cfg[:host_name]
 
-      has_host_config = keys.any? { |k| cfg.key?(k) }
+      @ssh_options = { port: 22, timeout: 10 }.merge(cfg)
+      @ssh_options[:port] = options[:port] if options[:port]
 
-      if has_host_config 
-        @ssh_options = cfg
-        return
-      end
 
-      @ssh_options = { port: options[:port] || 22, timeout: 10 }
       if options[:private_key_path]
         @ssh_options[:keys] = [options.delete(:private_key_path)]
-      else
+      elsif options[:password]
         @ssh_options[:password] = options[:password]
       end
+
       if options[:proxy_jump]
         @proxy_jump = options[:proxy_jump]
         @ssh_options[:proxy] = Net::SSH::Proxy::Jump.new(@proxy_jump)
+      elsif (proxy = @ssh_options[:proxy]).is_a?(Net::SSH::Proxy::Jump)
+        @proxy_jump = proxy.instance_variable_get(:@proxy_jump)
       end
+
       @ssh_options[:verify_host_key] = options[:verify_host_key] if options[:verify_host_key]
-    end
-
-    def resolve_ssh_alias!(options)
-      output = `ssh -G #{@host} 2>/dev/null`
-      return unless $?.success?
-
-      parsed = output.lines.each_with_object({}) do |line, h|
-        k, v = line.strip.split(" ", 2)
-        h[k] = v
-      end
-
-      @host          = parsed["hostname"] if parsed["hostname"]
-      options[:port] = parsed["port"].to_i if parsed["port"]
-
-      jump = parsed["proxyjump"]
-      options[:proxy_jump] = jump if jump && jump != "none"
-
-      options[:verify_host_key] = :never if %w[no false].include?(parsed["stricthostkeychecking"]&.downcase)
     end
 
     def method_missing(name, *args)
