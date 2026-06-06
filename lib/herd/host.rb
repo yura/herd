@@ -32,6 +32,24 @@ module Herd
     end
 
     def create_ssh_options(options)
+      cfg = Net::SSH::Config.for(@host)
+
+      keys = %i[
+        user
+        port
+        keys
+        proxy
+        proxy_jump
+        hostname
+      ]
+
+      has_host_config = keys.any? { |k| cfg.key?(k) }
+
+      if has_host_config 
+        @ssh_options = cfg
+        return
+      end
+
       @ssh_options = { port: options[:port] || 22, timeout: 10 }
       if options[:private_key_path]
         @ssh_options[:keys] = [options.delete(:private_key_path)]

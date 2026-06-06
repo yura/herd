@@ -49,7 +49,11 @@ module Herd
         append_to_file(path, "#{line}\n", sudo: sudo)
       end
 
-      def dir(path, user, group)
+      def dir(path, user = nil, group = nil)
+puts "!!!!!!!!!!!!!!!!!!"
+puts "user: #{user.inspect}"
+puts "group: #{group.inspect}"
+puts "!!!!!!!!!!!!!!!!!!"
         mkdir_p(path, user, group)
         source      = "#{File.expand_path(File.join(FILES, path))}/"
         destination = "#{host.user}@#{host.host}:#{path}"
@@ -59,7 +63,10 @@ module Herd
           raise Herd::CommandError, result.error unless result.success?
         end
 
-        dir_user_and_group(path, user, group)
+        if user && group
+puts "!!!! changing permssions"
+          dir_user_and_group(path, user, group)
+        end
       end
 
       def upload_file(local_path, remote_path, user, group, mode: nil)
@@ -80,7 +87,10 @@ module Herd
         else
           run("mkdir -p #{path}")
         end
-        file_user_and_group(path, user, group)
+
+        if user && group
+          file_user_and_group(path, user, group)
+        end
         file_permissions(path, mode) if mode
       end
 
