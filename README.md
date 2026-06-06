@@ -18,7 +18,10 @@ Fast host configuration tool.
 * [x] Does not raise an CommandError if there is an error in a command
 * [x] Check file contains some string — `file_contains?`
 * [ ] ANSI terminal
-* [x] Parallel execution — `Runner` via `Thread`
+* [ ] Parallel execution
+  * [ ] Add new parameter to "#exec". By default it will be :sequential execution, optionally :parallel
+        for parallel execution you can add `:depends_on` for child task and `:label` for parent one.
+  * [ ] for sequential execution you can add parallel block in any place
 * [ ] Interpret Dockerfile
 * [x] Add user to group — `user_add_to_group`
 
