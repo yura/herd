@@ -4,7 +4,7 @@ RSpec.describe Herd::Commands::Apt do
   let(:session) { Herd::Session.new(nil, mock_ssh_session, "secret", mock_log) }
   let(:mock_ssh_session) { instance_double(Net::SSH::Connection::Session) }
   let(:mock_ssh_channel) { instance_double(Net::SSH::Connection::Channel) }
-  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil) }
+  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil, flush: nil) }
 
   before do
     allow(mock_ssh_session).to receive(:open_channel).and_yield(mock_ssh_channel)
