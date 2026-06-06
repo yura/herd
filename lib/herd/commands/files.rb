@@ -24,6 +24,10 @@ module Herd
         run("test -w #{path} && echo yes || echo no").chomp == "yes"
       end
 
+      def symlink?(path)
+        run("test -L #{path} && echo yes || echo no").chomp == "yes"
+      end
+
       def file_contains?(path, content)
         return nil unless file_exists?(path)
 
@@ -49,11 +53,13 @@ module Herd
         append_to_file(path, "#{line}\n", sudo: sudo)
       end
 
+      def replace_line_in_file(path, pattern, replacement, sudo: false)
+        escaped = replacement.gsub("/", "\\/")
+        cmd = "sed -i 's/#{pattern.source}/#{escaped}/' #{path}"
+        sudo ? sudo(cmd) : run(cmd)
+      end
+
       def dir(path, user = nil, group = nil)
-puts "!!!!!!!!!!!!!!!!!!"
-puts "user: #{user.inspect}"
-puts "group: #{group.inspect}"
-puts "!!!!!!!!!!!!!!!!!!"
         mkdir_p(path, user, group)
         source      = "#{File.expand_path(File.join(FILES, path))}/"
         destination = "#{host.user}@#{host.host}:#{path}"
@@ -63,10 +69,7 @@ puts "!!!!!!!!!!!!!!!!!!"
           raise Herd::CommandError, result.error unless result.success?
         end
 
-        if user && group
-puts "!!!! changing permssions"
-          dir_user_and_group(path, user, group)
-        end
+        dir_user_and_group(path, user, group) if user && group
       end
 
       def upload_file(local_path, remote_path, user, group, mode: nil)
