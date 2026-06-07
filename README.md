@@ -44,9 +44,14 @@ gem install herd-rb
 
 ```ruby
 # password auth
-host = Herd::Host.new("tesla.com", "elon", password: "T0pS3kr3t")
+host = Herd::Host.new("tesla.com", user: "elon", password: "T0pS3kr3t")
 # or key auth
-host = Herd::Host.new("tesla.com", "elon", private_key_path: "~/.ssh/id_ed25519")
+host = Herd::Host.new("tesla.com", user: "elon")
+# or specific key auth
+host = Herd::Host.new("tesla.com", user: "elon", identity_file: "~/.ssh/custom_key")
+
+# host configuration can also be taken from the SSH Config
+host = Herd::Host.new("tesla-ssh-config")
 
 # run a single command
 host.exec("hostname")
@@ -64,8 +69,8 @@ end
 
 ```ruby
 hosts = [
-  Herd::Host.new("web-01.example.com", "deploy", private_key_path: "~/.ssh/id_ed25519"),
-  Herd::Host.new("web-02.example.com", "deploy", private_key_path: "~/.ssh/id_ed25519"),
+  Herd::Host.new("web-01.example.com", user: "deploy", private_key_path: "~/.ssh/id_ed25519"),
+  Herd::Host.new("web-02.example.com", user: "deploy", private_key_path: "~/.ssh/id_ed25519"),
 ]
 
 runner = Herd::Runner.new(hosts)

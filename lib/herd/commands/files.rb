@@ -174,9 +174,11 @@ module Herd
       end
 
       def rsync_ssh_cmd
-        cmd = "ssh -p #{host.port}"
-        cmd += " -J #{host.proxy_jump}" if host.proxy_jump
-        cmd
+        if host.port
+          "ssh -p #{host.port}"
+        else
+          "ssh"
+        end
       end
 
       def diff(actual, required)
