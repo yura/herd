@@ -3,7 +3,7 @@
 require "net/ssh"
 
 RSpec.describe Herd::Host do
-  let(:host) { described_class.new("tesla.com", "elon", password: "T0pS3kr3t") }
+  let(:host) { described_class.new("tesla.com", user: "elon", password: "T0pS3kr3t") }
   let(:mock_ssh_session) { instance_double(Net::SSH::Connection::Session) }
   let(:mock_ssh_channel) { instance_double(Net::SSH::Connection::Channel) }
   let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil, flush: nil) }

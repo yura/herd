@@ -10,7 +10,7 @@ module Herd
   class Host
     include Herd::Log
 
-    attr_reader :host, :port, :user, :ssh_options, :vars, :log, :password
+    attr_reader :host, :port, :user, :ssh_alias, :ssh_options, :vars, :log, :password
 
     # port, private_key_path, password are for the ssh connection
     def initialize(host, options = {})
@@ -24,17 +24,15 @@ module Herd
     end
 
     def compose_ssh_options(options)
-      cfg = Net::SSH::Config.for(host)
+      cfg = Net::SSH::Config.for(@host)
 
-      @host = cfg.delete(:host_name) if cfg[:host_name]
+      if cfg[:host_name]
+        @ssh_alias = @host
+        @host = cfg.delete(:host_name)
+      end
 
       @ssh_options = { port: 22, timeout: 10 }.merge(cfg).merge(options)
-
-      if ssh_options[:user]
-        @user = ssh_options[:user]
-      else
-        raise "No user given"
-      end
+      @user = ssh_options[:user] || raise("No user given for #{@host}")
 
       if options[:identity_file]
         @ssh_options[:keys] = [options.delete(:identity_file)]
