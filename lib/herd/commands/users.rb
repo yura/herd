@@ -23,7 +23,9 @@ module Herd
       end
 
       def change_password(username, new_password)
-        run("echo '#{username}:#{new_password}' | sudo chpasswd")
+        with_env("HERD_PASS" => new_password) do
+          run("echo '#{username}:$HERD_PASS' | sudo -p '#{Herd::Session::SUDO_PROMPT}' chpasswd")
+        end
         host.password = new_password if username == host.user
       end
     end

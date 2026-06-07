@@ -45,7 +45,7 @@ module Herd
         write_to_file(tmp, content)
         run("cat #{path} >> #{tmp}") unless file_contains?(path, content).nil?
         run("chmod --reference=#{path} #{tmp}") if file_exists?(path)
-        run(sudo ? "sudo mv #{tmp} #{path}" : "mv #{tmp} #{path}")
+        sudo ? sudo("mv #{tmp} #{path}") : run("mv #{tmp} #{path}")
       end
 
       def ensure_line_in_file(path, line, sudo: false)
