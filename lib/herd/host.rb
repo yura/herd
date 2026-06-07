@@ -31,9 +31,7 @@ module Herd
       @user = ssh_options[:user]
       @port = ssh_options[:port]
 
-      return unless identity_file
-
-      @ssh_options[:keys] = [identity_file]
+      @ssh_options[:keys] = [@identity_file] if @identity_file
     end
 
     def password=(value)
