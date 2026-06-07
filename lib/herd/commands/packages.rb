@@ -11,7 +11,7 @@ module Herd
         end
       end
 
-      def package_update
+      def update_package_list
         case package_manager
         when :apt then apt_update
         else raise "unsupported package manager: #{package_manager}"

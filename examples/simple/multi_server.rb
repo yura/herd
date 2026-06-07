@@ -31,7 +31,7 @@ playbook = Herd::Playbook.new(runner)
 playbook.run(only: ARGV[0]) do
   packages do
     apt_update
-    apt_install("htop", "vim", "curl", "unzip")
+    apt_install(%w[htop vim curl unzip])
   end
 
   shell_defaults do
