@@ -10,12 +10,11 @@ module Herd
   class Host
     include Herd::Log
 
-    attr_reader :host, :port, :user, :ssh_alias, :ssh_options, :vars, :log, :password
+    attr_reader :host, :port, :user, :ssh_options, :vars, :log, :password
 
     # port, private_key_path, password are for the ssh connection
     def initialize(host, options = {})
       @host = host
-      @password = options.delete(:password)
 
       compose_ssh_options(options)
 
@@ -23,15 +22,18 @@ module Herd
     end
 
     def compose_ssh_options(options)
-      cfg = Net::SSH::Config.for(@host)
+      ssh_config = Net::SSH::Config.for(host)
 
-      @ssh_options = { port: 22, timeout: 10 }.merge(cfg).merge(options)
+      @password = options.delete(:password)
+      @identity_file = options.delete(:identity_file)
+
+      @ssh_options = { password: @password, port: 22, timeout: 10 }.merge(ssh_config).merge(options)
       @user = ssh_options[:user]
       @port = ssh_options[:port]
 
-      if options[:identity_file]
-        @ssh_options[:keys] = [options.delete(:identity_file)]
-      end
+      return unless identity_file
+
+      @ssh_options[:keys] = [identity_file]
     end
 
     def password=(value)

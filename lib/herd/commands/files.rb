@@ -62,7 +62,7 @@ module Herd
 
       def dir(path, user = nil, group = nil)
         mkdir_p(path, user, group)
-        source      = "#{File.expand_path(File.join(FILES, path))}/"
+        source = "#{File.expand_path(File.join(FILES, path))}/"
         rsync(source, path, "-rptqz --checksum --force")
 
         dir_user_and_group(path, user, group) if user && group
@@ -167,9 +167,7 @@ module Herd
       def rsync(source, remote_path, params)
         destination = "#{host.host}:#{remote_path}"
 
-        if host.user
-          destination = "#{host.user}@#{destination}"
-        end
+        destination = "#{host.user}@#{destination}" if host.user
 
         params = "#{params} -e \"#{rsync_communication_program}\""
 

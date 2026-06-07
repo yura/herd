@@ -28,7 +28,7 @@ host.exec do
 
   # Essentials
   apt_update
-  apt_install :w[ curl git vim htop ufw unattended-upgrades ]
+  apt_install :w[curl git vim htop ufw unattended-upgrades]
 
   info "bootstrap complete — connect as deploy with your SSH key"
 end

@@ -12,11 +12,11 @@ gem "rake", "~> 13.0"
 
 gem "bcrypt_pbkdf", "~> 1.1"
 gem "csv"
-gem "logger"
 gem "diff-lcs"
 gem "ed25519", "~> 1.4"
 gem "erb"
 gem "json"
+gem "logger"
 gem "net-ssh", "~> 7.3"
 gem "rsync"
 

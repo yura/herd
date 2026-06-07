@@ -118,7 +118,7 @@ module Herd
       ensure
         begin
           instance_exec(&check_block) if check_block
-        rescue => e
+        rescue StandardError => e
           info("check failed: #{e.message}")
         end
       end
