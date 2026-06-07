@@ -4,26 +4,14 @@ Fast host configuration tool.
 
 ## TODO
 
-* [x] Run with `sudo`
-* [x] Commands with arguments
-* [x] Reading and writing files
-* [x] Templates (ERB)
-* [x] Copy dirs
-  * [ ] Compare with Rsync
-* [x] Crontab
-* [x] Log all commands for all hosts
-* [x] Bug: if file contains some shell variable like `$host` it replaces it with empty value
 * [ ] Bug: do not work with ssh config files
 * [ ] Ask password
-* [x] Does not raise an CommandError if there is an error in a command
-* [x] Check file contains some string — `file_contains?`
 * [ ] ANSI terminal
 * [ ] Parallel execution
   * [ ] Add new parameter to "#exec". By default it will be :sequential execution, optionally :parallel
         for parallel execution you can add `:depends_on` for child task and `:label` for parent one.
   * [ ] for sequential execution you can add parallel block in any place
 * [ ] Interpret Dockerfile
-* [x] Add user to group — `user_add_to_group`
 
 ## Installation
 
@@ -41,13 +29,13 @@ bundle install
 Once published to RubyGems, install the gem and add to the application's Gemfile by executing:
 
 ```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+bundle add herd-rb
 ```
 
 If bundler is not being used to manage dependencies, install the gem by executing:
 
 ```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+gem install herd-rb
 ```
 
 ## Usage
@@ -82,12 +70,25 @@ hosts = [
 
 runner = Herd::Runner.new(hosts)
 
-# run a block of commands on all hosts in parallel
-runner.exec do
-  apt_update
-  apt_install("nginx")
-  systemctl_enable("nginx", now: true)
-end
+# run single command on all hosts in parallel
+runner.exec("hostname") # ["alpha001\n", "omega001\n"]
+
+# or run block of commands on all hosts in parallel
+runner.exec { hostname + uptime } # ["alpha001\n2000 years\n", "omega001\2500 years\n"]
+```
+
+List of hosts can be loaded from the CSV file:
+
+```csv
+# hosts.csv
+host,port,user,password,some_param1,some_param2
+alpha.tesla.com,2022,elon,T0pS3kr3t,value1,value2
+omega.tesla.com,2023,elon,T0pS3kr3t2,value3,value4
+```
+
+```ruby
+hosts = Herd::Host.from_csv("hosts.csv")
+runner = Herd::Runner.new(hosts)
 ```
 
 Any Ruby logic works inside the block:
