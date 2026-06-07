@@ -62,12 +62,16 @@ module Herd
 
       def dir(path, user = nil, group = nil)
         mkdir_p(path, user, group)
-        rsync_to("#{File.expand_path(File.join(FILES, path))}/", path, "-rptqz --checksum --force")
+        source      = "#{File.expand_path(File.join(FILES, path))}/"
+        rsync(source, path, "-rptqz --checksum --force")
+
         dir_user_and_group(path, user, group) if user && group
       end
 
       def upload_file(local_path, remote_path, user, group, mode: nil)
-        rsync_to(local_path, remote_path, "-ptqz --checksum")
+        params = "-ptqz --checksum"
+
+        rsync(local_path, remote_path, params)
         file_user_and_group(remote_path, user, group)
         file_permissions(remote_path, mode) if mode
       end
@@ -160,11 +164,25 @@ module Herd
         sudo("chmod #{mode} #{path}")
       end
 
-      def rsync_to(source, remote_path, params)
-        destination = "#{host.user}@#{host.ssh_alias || host.host}:#{remote_path}"
-        ssh_flag    = host.ssh_alias ? "" : " -e 'ssh -p #{host.port}'"
-        Rsync.run(source, destination, "#{params}#{ssh_flag}") do |result|
+      def rsync(source, remote_path, params)
+        destination = "#{host.host}:#{remote_path}"
+
+        if host.user
+          destination = "#{host.user}@#{destination}"
+        end
+
+        params = "#{params} -e \"#{rsync_communication_program}\""
+
+        Rsync.run(source, destination, params) do |result|
           raise Herd::CommandError, result.error unless result.success?
+        end
+      end
+
+      def rsync_communication_program
+        if host.port
+          "ssh -p #{host.port}"
+        else
+          "ssh"
         end
       end
 

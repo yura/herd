@@ -15,24 +15,19 @@ module Herd
     # port, private_key_path, password are for the ssh connection
     def initialize(host, options = {})
       @host = host
+      @password = options.delete(:password)
 
       compose_ssh_options(options)
 
-      @port = ssh_options[:port]
-      @password = options.delete(:password)
-      @vars = options.merge(host: @host, user: user, port: ssh_options[:port])
+      @vars = options.merge(host: host, user: user, port: ssh_options[:port])
     end
 
     def compose_ssh_options(options)
       cfg = Net::SSH::Config.for(@host)
 
-      if cfg[:host_name]
-        @ssh_alias = @host
-        @host = cfg.delete(:host_name)
-      end
-
       @ssh_options = { port: 22, timeout: 10 }.merge(cfg).merge(options)
-      @user = ssh_options[:user] || raise("No user given for #{@host}")
+      @user = ssh_options[:user]
+      @port = ssh_options[:port]
 
       if options[:identity_file]
         @ssh_options[:keys] = [options.delete(:identity_file)]
