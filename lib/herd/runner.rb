@@ -15,7 +15,11 @@ module Herd
       end
 
       # rescue nil so a failed host doesn't prevent waiting for the rest
-      threads.each { |t| t.join rescue nil }
+      threads.each do |t|
+        t.join
+      rescue StandardError
+        nil
+      end
       threads.map(&:value)
     end
   end

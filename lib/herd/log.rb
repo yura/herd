@@ -6,6 +6,11 @@ require "json"
 module Herd
   # Methods for logging commands, outputs and errors.
   module Log
+    def info(message)
+      label = host.vars[:hostname] || host.host
+      puts "[#{label}] #{message}"
+    end
+
     def log_file_path
       dir = "log/#{vars[:host]}_#{vars[:port]}_#{vars[:user]}"
       FileUtils.mkdir_p(dir)

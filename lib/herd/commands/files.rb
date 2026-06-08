@@ -10,6 +10,7 @@ module Herd
 
     # Create, read, write, remove files, check permssions.
     module Files
+      class FileNotFound < StandardError; end
       class PermissionDeniedError < StandardError; end
 
       def file_exists?(path)
@@ -24,73 +25,72 @@ module Herd
         run("test -w #{path} && echo yes || echo no").chomp == "yes"
       end
 
-      def file_contains?(path, content)
-        return nil unless file_exists?(path)
+      def symlink?(path)
+        run("test -L #{path} && echo yes || echo no").chomp == "yes"
+      end
 
-        read_file!(path, sudo: true)&.include?(content) || false
+      # Returns nil if the file doesn't exist, false if it exists but doesn't contain content, true if it does.
+      def file_contains?(path, content)
+        raise FileNotFound unless file_exists?(path)
+
+        read_file!(path, sudo: true).include?(content)
       end
 
       # Always appends \n to content — otherwise the prepended line merges with the first line of the file.
       def prepend_to_file(path, content, sudo: false)
-        return if file_contains?(path, content)
+        unless file_exists?(path)
+          touch path
+        end
 
         content = "#{content}\n" unless content.end_with?("\n")
 
-        tmp = "/tmp/herd_prepend_#{Process.pid}"
+        tmp = mktemp
         write_to_file(tmp, content)
-        run("cat #{path} >> #{tmp}") unless file_contains?(path, content).nil?
-        run("chmod --reference=#{path} #{tmp}") if file_exists?(path)
-        run(sudo ? "sudo mv #{tmp} #{path}" : "mv #{tmp} #{path}")
+        run("cat #{path} >> #{tmp}") if !file_contains?(path, content).nil?
+        run("chmod --reference=#{path} #{tmp}")
+        sudo ? sudo("mv #{tmp} #{path}") : run("mv #{tmp} #{path}")
+
+        # FIXME: need to delete tmp file?
       end
 
       def ensure_line_in_file(path, line, sudo: false)
+        touch path unless file_exists?(path)
+
         return if file_contains?(path, line)
 
         append_to_file(path, "#{line}\n", sudo: sudo)
       end
 
+      def replace_line_in_file(path, pattern, replacement, sudo: false)
+        escaped = replacement.gsub("/", "\\/")
+        cmd = "sed -i 's/#{pattern.source}/#{escaped}/' #{path}"
+        sudo ? sudo(cmd) : run(cmd)
+      end
+
       def dir(path, user = nil, group = nil)
-puts "!!!!!!!!!!!!!!!!!!"
-puts "user: #{user.inspect}"
-puts "group: #{group.inspect}"
-puts "!!!!!!!!!!!!!!!!!!"
         mkdir_p(path, user, group)
-        source      = "#{File.expand_path(File.join(FILES, path))}/"
-        destination = "#{host.user}@#{host.host}:#{path}"
-        params      = "-rptqz --checksum --force -e \"#{rsync_ssh_cmd}\""
+        source = "#{File.expand_path(File.join(FILES, path))}/"
+        rsync(source, path, "-rptqz --checksum --force")
 
-        Rsync.run(source, destination, params) do |result|
-          raise Herd::CommandError, result.error unless result.success?
-        end
-
-        if user && group
-puts "!!!! changing permssions"
-          dir_user_and_group(path, user, group)
-        end
+        dir_user_and_group(path, user, group) if user && group
       end
 
       def upload_file(local_path, remote_path, user, group, mode: nil)
-        destination = "#{host.user}@#{host.host}:#{remote_path}"
-        params      = "-ptqz --checksum -e \"#{rsync_ssh_cmd}\""
+        params = "-ptqz --checksum"
 
-        Rsync.run(local_path, destination, params) do |result|
-          raise Herd::CommandError, result.error unless result.success?
-        end
-
+        rsync(local_path, remote_path, params)
         file_user_and_group(remote_path, user, group)
         file_permissions(remote_path, mode) if mode
       end
 
       def mkdir_p(path, user, group, sudo: false, mode: nil)
         if sudo
-          run("sudo mkdir -p #{path}")
+          sudo("mkdir -p #{path}")
         else
           run("mkdir -p #{path}")
         end
 
-        if user && group
-          file_user_and_group(path, user, group)
-        end
+        file_user_and_group(path, user, group) if user && group
         file_permissions(path, mode) if mode
       end
 
@@ -124,12 +124,8 @@ puts "!!!! changing permssions"
       end
 
       def read_file(path, sudo: false)
-        command = "cat #{path}"
-        command = "sudo #{command}" if sudo
-
-        result = run(command)&.chomp
+        result = (sudo ? sudo("cat #{path}") : run("cat #{path}"))&.chomp
         result = result.sub(/\A(\r\n|\r|\n)/, "") if sudo
-
         result
       end
 
@@ -145,18 +141,14 @@ puts "!!!! changing permssions"
 
       def write_to_file(path, content, sudo: false)
         content = "#{content}\n" unless content.end_with?("\n")
-        command = "tee"
-        command = "sudo #{command}" if sudo
-        run(%(#{command} #{path} > /dev/null << "EOF"
-#{content}EOF))
+        cmd = %(tee #{path} > /dev/null << "EOF"\n#{content}EOF)
+        sudo ? sudo(cmd) : run(cmd)
       end
 
       def append_to_file(path, content, sudo: false)
         content = "#{content}\n" unless content.end_with?("\n")
-        command = "tee -a"
-        command = "sudo #{command}" if sudo
-        run(%(#{command} #{path} << "EOF"
-#{content}EOF))
+        cmd = %(tee -a #{path} << "EOF"\n#{content}EOF)
+        sudo ? sudo(cmd) : run(cmd)
       end
 
       def dir_user_and_group(path, user, group)
@@ -171,10 +163,24 @@ puts "!!!! changing permssions"
         sudo("chmod #{mode} #{path}")
       end
 
-      def rsync_ssh_cmd
-        cmd = "ssh -p #{host.port}"
-        cmd += " -J #{host.proxy_jump}" if host.proxy_jump
-        cmd
+      def rsync(source, remote_path, params)
+        destination = "#{host.host}:#{remote_path}"
+
+        destination = "#{host.user}@#{destination}" if host.user
+
+        params = "#{params} -e \"#{rsync_communication_program}\""
+
+        Rsync.run(source, destination, params) do |result|
+          raise Herd::CommandError, result.error unless result.success?
+        end
+      end
+
+      def rsync_communication_program
+        if host.port
+          "ssh -p #{host.port}"
+        else
+          "ssh"
+        end
       end
 
       def diff(actual, required)

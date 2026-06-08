@@ -22,15 +22,16 @@ hosts = [
   Herd::Host.new("web-03.example.com", "deploy", password: ENV.fetch("WEB03_PASSWORD")),
 
   # SSH alias — host/port/proxy_jump resolved from ~/.ssh/config automatically
-  Herd::Host.new("web-04-alias", "deploy", private_key_path: "~/.ssh/id_ed25519"),
+  Herd::Host.new("web-04-alias", "deploy", private_key_path: "~/.ssh/id_ed25519")
 ]
 
-runner  = Herd::Runner.new(hosts)
+runner = Herd::Runner.new(hosts)
 playbook = Herd::Playbook.new(runner)
 
 playbook.run(only: ARGV[0]) do
   packages do
-    install_packages(%w[htop vim curl unzip])
+    apt_update
+    apt_install %w[htop vim curl unzip]
   end
 
   shell_defaults do

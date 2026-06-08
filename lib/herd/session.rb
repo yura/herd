@@ -35,9 +35,24 @@ module Herd
       run(command)
     end
 
+    SUDO_PROMPT = "HERD_SUDO: "
+
+    def sudo(command)
+      run("sudo -p '#{SUDO_PROMPT}' #{command}")
+    end
+
+    def with_env(env)
+      @env = (@env || {}).merge(env)
+      yield
+    ensure
+      @env = nil
+    end
+
     def run(command)
       caller_method = caller_locations.find { |loc| !loc.path.include?("/lib/herd/") }&.label
-      full_command = @working_dir ? "cd #{@working_dir} && #{command}" : command
+      env_exports   = @env&.map { |k, v| "export #{k}=#{v}" }&.join("; ")
+      full_command  = @working_dir ? "cd #{@working_dir} && #{command}" : command
+      full_command  = "#{env_exports}; #{full_command}" if env_exports
       result = []
       ssh.open_channel do |channel|
         channel.request_pty do |ch, success|
@@ -55,10 +70,6 @@ module Herd
       yield
     ensure
       @working_dir = nil
-    end
-
-    def info(message)
-      puts "[#{host.host}] #{message}"
     end
 
     def respond_to_missing?(cmd)
@@ -88,7 +99,7 @@ module Herd
         Herd::Commands.constants
                       .sort
                       .map { |const_name| Herd::Commands.const_get(const_name) }
-                      .select { |value| value.is_a?(Module) }
+                      .grep(Module)
       end
     end
 
@@ -100,7 +111,8 @@ module Herd
       output, exit_code = nil
       channel.exec("set -o pipefail; #{command}") do |c, _|
         c.on_data do |_, data|
-          if data&.include?("[sudo] password for")
+          data_utf8 = data.dup.force_encoding("UTF-8")
+          if data_utf8.include?(SUDO_PROMPT) || data_utf8.include?("[sudo] password for")
             c.send_data "#{password}\n"
           else
             # strip ANSI escape codes produced by PTY before printing
@@ -128,7 +140,7 @@ module Herd
       end
     end
 
-    def process_success(channel, command, started_at, data, result, caller_method = nil)
+    def process_success(_channel, command, started_at, data, result, caller_method = nil)
       log_command_output(command, data, started_at, caller_method)
       result << data
     end

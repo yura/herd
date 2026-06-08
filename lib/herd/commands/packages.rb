@@ -2,11 +2,36 @@
 
 module Herd
   module Commands
-    # Working with package managers, like apt for Ubuntu
+    # Abstraction over OS package managers — delegates to apt, yum, etc. based on the detected system
     module Packages
-      def install_packages(packages)
-        packages = [packages].flatten.join(" ")
-        echo %(-e '#{password}\n' | sudo -S apt install -qq -y #{packages})
+      def package_install(*packages, **)
+        case package_manager
+        when :apt then apt_install(*packages, **)
+        else raise "unsupported package manager: #{package_manager}"
+        end
+      end
+
+      def update_package_list
+        case package_manager
+        when :apt then apt_update
+        else raise "unsupported package manager: #{package_manager}"
+        end
+      end
+
+      def package_installed?(package)
+        case package_manager
+        when :apt then apt_installed?(package)
+        else raise "unsupported package manager: #{package_manager}"
+        end
+      end
+
+      private
+
+      def package_manager
+        @package_manager ||= begin
+          out = run("which apt-get > /dev/null 2>&1 && echo apt || which yum > /dev/null 2>&1 && echo yum || echo unknown").strip
+          out.to_sym
+        end
       end
     end
   end

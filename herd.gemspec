@@ -37,6 +37,14 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ["lib"]
 
+  spec.add_dependency "bcrypt_pbkdf"
+  spec.add_dependency "csv"
+  spec.add_dependency "diff-lcs"
+  spec.add_dependency "ed25519"
+  spec.add_dependency "logger"
+  spec.add_dependency "net-ssh"
+  spec.add_dependency "rsync"
+
   # For more information and examples about making a new gem, check out our
   # guide at: https://bundler.io/guides/creating_gem.html
 end
