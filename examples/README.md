@@ -25,7 +25,7 @@ bundle exec ruby multi_server.rb --except crontab_setup
 ### Credentials
 
 Examples read secrets from environment variables (`ROOT_PASSWORD`, `DEPLOY_PASSWORD`)
-or use key-based auth (`private_key_path: "~/.ssh/id_ed25519"`).
+or use key-based auth (`keys: ["~/.ssh/id_ed25519"]`).
 
 ---
 
@@ -40,33 +40,20 @@ Hook DSL supports three blocks, all optional:
 
 pre_conditions do
   # return false to skip this hook on this server
-<<<<<<< HEAD
-  file_exists?("~/projects/myapp/Gemfile")
-=======
   file_exists? "~/projects/myapp/Gemfile"
->>>>>>> 349acce (merge)
 end
 
 actions do
   apt_update
-<<<<<<< HEAD
-  apt_install("libvips-dev")
-  bundle("install")
-=======
   apt_install "libvips-dev"
   bundle "install"
->>>>>>> 349acce (merge)
   rails("runner", "ActiveStorage::VariantRecord.delete_all")
 end
 
 checks do
   # runs after actions to verify the result
   # raise or return false to mark hook as failed
-<<<<<<< HEAD
-  apt_installed?("libvips-dev")
-=======
   apt_installed? "libvips-dev"
->>>>>>> 349acce (merge)
 end
 ```
 

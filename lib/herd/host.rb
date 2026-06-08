@@ -12,26 +12,31 @@ module Herd
 
     attr_reader :host, :port, :user, :ssh_options, :vars, :log, :password
 
-    # port, private_key_path, password are for the ssh connection
-    def initialize(host, options = {})
+    # ssh_options are ssh configuration options such as port, password, etc.
+    # vars are additional named values passed while host configuration such as hostname: "alpha" 
+    def initialize(host, ssh_options = {}, vars = {})
       @host = host
+      ssh_options = ssh_options.dup
+      vars = vars.dup
 
-      compose_ssh_options(options)
+      if vars.empty? && !(ssh_options.keys - Net::SSH::VALID_OPTIONS).empty?
+        vars = (ssh_options.keys - Net::SSH::VALID_OPTIONS).to_h { |k| [k, ssh_options[k]] }
+        ssh_options = (ssh_options.keys & Net::SSH::VALID_OPTIONS).to_h { |k| [k, ssh_options[k]] }
+      end
 
-      @vars = options.merge(host: host, user: user, port: ssh_options[:port])
+      compose_ssh_options(ssh_options)
+
+      @vars = vars.merge(host: host, user: user, port: port)
     end
 
-    def compose_ssh_options(options)
-      ssh_config = Net::SSH::Config.for(host)
+    def compose_ssh_options(opts)
+      cfg = Net::SSH::Config.for(host)
 
-      @password = options.delete(:password)
-      @identity_file = options.delete(:identity_file)
+      @password = opts.delete(:password)
 
-      @ssh_options = { password: @password, port: 22, timeout: 10 }.merge(ssh_config).merge(options)
+      @ssh_options = { password: @password, port: 22, timeout: 10 }.merge(cfg).merge(opts)
       @user = ssh_options[:user]
       @port = ssh_options[:port]
-
-      @ssh_options[:keys] = [@identity_file] if @identity_file
     end
 
     def password=(value)

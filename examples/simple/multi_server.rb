@@ -10,19 +10,19 @@
 require "herd"
 
 # Define hosts inline or load from CSV:
-#   hosts = Herd::Host.from_csv("hosts.csv")  # columns: host,user,port,private_key_path
+#   hosts = Herd::Host.from_csv("hosts.csv")  # columns: host,user,port,etc.
 hosts = [
   # key auth, default port 22
-  Herd::Host.new("web-01.example.com", "deploy", private_key_path: "~/.ssh/id_ed25519"),
+  Herd::Host.new("web-01.example.com", user: "deploy", keys: ["~/.ssh/id_ed25519"]),
 
   # non-standard port
-  Herd::Host.new("web-02.example.com", "deploy", private_key_path: "~/.ssh/id_ed25519", port: 2222),
+  Herd::Host.new("web-02.example.com", user: "deploy", keys: ["~/.ssh/id_ed25519"], port: 2222),
 
   # password auth
-  Herd::Host.new("web-03.example.com", "deploy", password: ENV.fetch("WEB03_PASSWORD")),
+  Herd::Host.new("web-03.example.com", user: "deploy", password: ENV.fetch("WEB03_PASSWORD")),
 
   # SSH alias — host/port/proxy_jump resolved from ~/.ssh/config automatically
-  Herd::Host.new("web-04-alias", "deploy", private_key_path: "~/.ssh/id_ed25519")
+  Herd::Host.new("web-04-alias", user: "deploy", keys: ["~/.ssh/id_ed25519"])
 ]
 
 runner = Herd::Runner.new(hosts)

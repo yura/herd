@@ -48,7 +48,7 @@ host = Herd::Host.new("tesla.com", user: "elon", password: "T0pS3kr3t")
 # or key auth
 host = Herd::Host.new("tesla.com", user: "elon")
 # or specific key auth
-host = Herd::Host.new("tesla.com", user: "elon", identity_file: "~/.ssh/custom_key")
+host = Herd::Host.new("tesla.com", user: "elon", keys: ["~/.ssh/custom_key"])
 
 # host configuration can also be taken from the SSH Config
 host = Herd::Host.new("tesla-ssh-config")
@@ -69,8 +69,8 @@ end
 
 ```ruby
 hosts = [
-  Herd::Host.new("web-01.example.com", user: "deploy", private_key_path: "~/.ssh/id_ed25519"),
-  Herd::Host.new("web-02.example.com", user: "deploy", private_key_path: "~/.ssh/id_ed25519"),
+  Herd::Host.new("web-01.example.com"),
+  Herd::Host.new("web-02.example.com")
 ]
 
 runner = Herd::Runner.new(hosts)
@@ -80,6 +80,19 @@ runner.exec("hostname") # ["alpha001\n", "omega001\n"]
 
 # or run block of commands on all hosts in parallel
 runner.exec { hostname + uptime } # ["alpha001\n2000 years\n", "omega001\2500 years\n"]
+```
+
+Additional named variables can be passed to the host and are accessible in the configuration block:
+
+```ruby
+hosts = [
+  Herd::Host.new("web-01.example.com", { user: "elon" }, hostname: "alpha"),
+  Herd::Host.new("web-02.example.com", { user: "mask" }, hostname: "omega")
+]
+
+runner.exec do |vars|
+  set_hostname vars[:hostname]
+end
 ```
 
 List of hosts can be loaded from the CSV file:
@@ -185,11 +198,11 @@ export ALIAS=<%= alias %>
 ```
 
 ```ruby
-host = Herd::Host.new("tesla.com", "elon", password: "T0pS3kr3t", alias: "alpha001")
-Herd::Runner.new([host]).exec do
-  # host.vars contains all named arguments except password and private_key_path:
+host = Herd::Host.new("tesla.com", { user: "elon", password: "T0pS3kr3t" }, alias: "alpha001")
+Herd::Runner.new([host]).exec do |vars|
+  # host.vars contains all named arguments except password:
   # { host: "tesla.com", port: 22, user: "elon", alias: "alpha001" }
-  template("/home/elon/.env", "elon", "elon", values: host.vars)
+  template("/home/elon/.env", "elon", "elon", values: vars)
 end
 ```
 

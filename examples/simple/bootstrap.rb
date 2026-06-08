@@ -11,7 +11,7 @@ HOST     = "my-server.example.com"
 HOSTNAME = "my-server"
 SSH_KEY  = "ssh-ed25519 AAAAC3Nz... your-public-key"
 
-host = Herd::Host.new(HOST, "root", password: ENV.fetch("ROOT_PASSWORD"))
+host = Herd::Host.new(HOST, user: "root", password: ENV.fetch("ROOT_PASSWORD"))
 
 host.exec do
   # Create deploy user

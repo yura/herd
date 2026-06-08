@@ -10,7 +10,7 @@ RSpec.describe Herd::Host, "#exec" do
   let(:host) { ENV.fetch("HERD_TEST_HOST", nil) }
   let(:port) { ENV.fetch("HERD_TEST_PORT", nil) }
   let(:user) { ENV.fetch("HERD_TEST_USER", nil) }
-  let(:herd_host) { described_class.new(host, user, port: port) }
+  let(:herd_host) { described_class.new(host, user: user, port: port) }
 
   context "when running single command passed as a string" do
     it "gives no error on calling true command" do

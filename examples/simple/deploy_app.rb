@@ -13,7 +13,7 @@ APP_NAME = "myapp"
 APP_PATH = "/home/deploy/#{APP_NAME}"
 DOMAIN   = "my-server.example.com"
 
-host = Herd::Host.new(DOMAIN, "deploy", private_key_path: "~/.ssh/id_ed25519")
+host = Herd::Host.new(DOMAIN, user: "deploy", keys: ["~/.ssh/id_ed25519"])
 
 host.exec do
   # Clone or update app
