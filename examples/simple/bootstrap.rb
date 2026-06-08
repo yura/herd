@@ -27,6 +27,7 @@ host.exec do
   set_hostname HOSTNAME
 
   # Essentials
+  #
   apt_update
   apt_install %w[curl git vim htop ufw unattended-upgrades]
 
