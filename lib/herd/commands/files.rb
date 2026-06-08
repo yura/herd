@@ -117,12 +117,8 @@ module Herd
       end
 
       def read_file(path, sudo: false)
-        command = "cat #{path}"
-        command = "sudo #{command}" if sudo
-
-        result = run(command)&.chomp
+        result = (sudo ? sudo("cat #{path}") : run("cat #{path}"))&.chomp
         result = result.sub(/\A(\r\n|\r|\n)/, "") if sudo
-
         result
       end
 
@@ -138,18 +134,14 @@ module Herd
 
       def write_to_file(path, content, sudo: false)
         content = "#{content}\n" unless content.end_with?("\n")
-        command = "tee"
-        command = "sudo #{command}" if sudo
-        run(%(#{command} #{path} > /dev/null << "EOF"
-#{content}EOF))
+        cmd = %(tee #{path} > /dev/null << "EOF"\n#{content}EOF)
+        sudo ? sudo(cmd) : run(cmd)
       end
 
       def append_to_file(path, content, sudo: false)
         content = "#{content}\n" unless content.end_with?("\n")
-        command = "tee -a"
-        command = "sudo #{command}" if sudo
-        run(%(#{command} #{path} << "EOF"
-#{content}EOF))
+        cmd = %(tee -a #{path} << "EOF"\n#{content}EOF)
+        sudo ? sudo(cmd) : run(cmd)
       end
 
       def dir_user_and_group(path, user, group)
