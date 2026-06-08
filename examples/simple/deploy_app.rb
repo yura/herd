@@ -19,10 +19,10 @@ host.exec do
   # Clone or update app
   if file_exists?(APP_PATH)
     within(APP_PATH) { run("git pull --ff-only") }
-    info("#{APP_NAME} updated")
+    info "#{APP_NAME} updated"
   else
-    run("git clone https://github.com/example/#{APP_NAME}.git #{APP_PATH}")
-    info("#{APP_NAME} cloned")
+    run "git clone https://github.com/example/#{APP_NAME}.git #{APP_PATH}"
+    info "#{APP_NAME} cloned"
   end
 
   # nginx vhost
@@ -40,8 +40,8 @@ host.exec do
   CONF
 
   expect_file_content_equals("/etc/nginx/conf.d/#{APP_NAME}.conf", nginx_conf)
-  sudo("nginx -t")
-  systemctl_reload("nginx")
+  sudo "nginx -t"
+  systemctl_reload "nginx"
 
   # systemd service
   service = <<~UNIT
@@ -61,8 +61,8 @@ host.exec do
 
   expect_file_content_equals("/etc/systemd/system/#{APP_NAME}.service", service)
   systemctl_daemon_reload
-  systemctl_enable(APP_NAME)
-  systemctl_restart(APP_NAME)
+  systemctl_enable APP_NAME
+  systemctl_restart APP_NAME
 
-  info("#{APP_NAME} deployed and running")
+  info "#{APP_NAME} deployed and running"
 end

@@ -72,11 +72,6 @@ module Herd
       @working_dir = nil
     end
 
-    def info(message)
-      label = host.vars[:hostname] || host.host
-      puts "[#{label}] #{message}"
-    end
-
     def respond_to_missing?(cmd)
       OS_COMMANDS.include?(cmd) || super
     end

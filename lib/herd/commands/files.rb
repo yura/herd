@@ -10,6 +10,7 @@ module Herd
 
     # Create, read, write, remove files, check permssions.
     module Files
+      class FileNotFound < StandardError; end
       class PermissionDeniedError < StandardError; end
 
       def file_exists?(path)
@@ -30,25 +31,31 @@ module Herd
 
       # Returns nil if the file doesn't exist, false if it exists but doesn't contain content, true if it does.
       def file_contains?(path, content)
-        return nil unless file_exists?(path) # rubocop:disable Style/ReturnNilInPredicateMethodDefinition
+        raise FileNotFound unless file_exists?(path)
 
-        read_file!(path, sudo: true)&.include?(content) || false
+        read_file!(path, sudo: true).include?(content)
       end
 
       # Always appends \n to content — otherwise the prepended line merges with the first line of the file.
       def prepend_to_file(path, content, sudo: false)
-        return if file_contains?(path, content)
+        unless file_exists?(path)
+          touch path
+        end
 
         content = "#{content}\n" unless content.end_with?("\n")
 
-        tmp = "/tmp/herd_prepend_#{Process.pid}"
+        tmp = mktemp
         write_to_file(tmp, content)
-        run("cat #{path} >> #{tmp}") unless file_contains?(path, content).nil?
-        run("chmod --reference=#{path} #{tmp}") if file_exists?(path)
+        run("cat #{path} >> #{tmp}") if !file_contains?(path, content).nil?
+        run("chmod --reference=#{path} #{tmp}")
         sudo ? sudo("mv #{tmp} #{path}") : run("mv #{tmp} #{path}")
+
+        # FIXME: need to delete tmp file?
       end
 
       def ensure_line_in_file(path, line, sudo: false)
+        touch path unless file_exists?(path)
+
         return if file_contains?(path, line)
 
         append_to_file(path, "#{line}\n", sudo: sudo)
