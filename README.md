@@ -4,7 +4,6 @@ Fast host configuration tool.
 
 ## TODO
 
-* [ ] ANSI terminal
 * [ ] Parallel execution
   * [ ] Add new parameter to "#exec". By default it will be :sequential execution, optionally :parallel
         for parallel execution you can add `:depends_on` for child task and `:label` for parent one.
