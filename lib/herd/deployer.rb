@@ -42,6 +42,10 @@ module Herd
       @check_block = block
     end
 
+    def pre_pull(&block)
+      @pre_pull_block = block
+    end
+
     def deploy(&)
       run_deploy(pull: true, &)
     end
@@ -58,6 +62,7 @@ module Herd
       tracking         = @tracking
       branch           = @branch
       check_block      = @check_block
+      pre_pull_block   = @pre_pull_block
       allow_untracked  = @allow_untracked
 
       @runner.exec do
@@ -76,7 +81,10 @@ module Herd
           end
         end
 
-        run("git -C #{app_path} pull") if pull
+        if pull
+          instance_exec(&pre_pull_block) if pre_pull_block
+          run("git -C #{app_path} pull")
+        end
 
         within(app_path) do
           applied   = run("ls #{tracking} 2>/dev/null || true").scan(/[0-9a-f]{40}/)
