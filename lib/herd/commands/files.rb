@@ -31,7 +31,7 @@ module Herd
 
       # Returns nil if the file doesn't exist, false if it exists but doesn't contain content, true if it does.
       def file_contains?(path, content)
-        raise FileNotFound unless file_exists?(path)
+        return nil unless file_exists?(path)
 
         read_file!(path, sudo: true).include?(content)
       end
@@ -47,7 +47,7 @@ module Herd
         tmp = mktemp
         write_to_file(tmp, content)
         run("cat #{path} >> #{tmp}") if !file_contains?(path, content).nil?
-        run("chmod --reference=#{path} #{tmp}")
+        run("chmod --reference=#{path.sub(/\A~/, '$HOME')} #{tmp}")
         sudo ? sudo("mv #{tmp} #{path}") : run("mv #{tmp} #{path}")
 
         # FIXME: need to delete tmp file?
@@ -139,16 +139,30 @@ module Herd
         end
       end
 
+      def mktemp
+        run("mktemp").strip
+      end
+
       def write_to_file(path, content, sudo: false)
         content = "#{content}\n" unless content.end_with?("\n")
-        cmd = %(tee #{path} > /dev/null << "EOF"\n#{content}EOF)
-        sudo ? sudo(cmd) : run(cmd)
+        if sudo
+          sudo(%(tee #{path} > /dev/null << "EOF"
+#{content}EOF))
+        else
+          run(%(tee #{path} > /dev/null << "EOF"
+#{content}EOF))
+        end
       end
 
       def append_to_file(path, content, sudo: false)
         content = "#{content}\n" unless content.end_with?("\n")
-        cmd = %(tee -a #{path} << "EOF"\n#{content}EOF)
-        sudo ? sudo(cmd) : run(cmd)
+        if sudo
+          sudo(%(tee -a #{path} << "EOF"
+#{content}EOF))
+        else
+          run(%(tee -a #{path} << "EOF"
+#{content}EOF))
+        end
       end
 
       def dir_user_and_group(path, user, group)
