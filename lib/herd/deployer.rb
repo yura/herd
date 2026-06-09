@@ -17,13 +17,14 @@ module Herd
       def checks(&block)         = @checks_block = block
     end
 
-    def initialize(hosts_or_runner, app_path:, branch: "main", hooks_dir: nil)
-      @runner      = hosts_or_runner.is_a?(Runner) ? hosts_or_runner : Runner.new(hosts_or_runner)
-      @app_path    = app_path
-      @branch      = branch
-      @hooks       = {}
-      @tracking    = "#{TRACKING_DIR}/#{File.basename(app_path)}/"
-      @check_block = nil
+    def initialize(hosts_or_runner, app_path:, branch: "main", hooks_dir: nil, allow_untracked: false)
+      @runner          = hosts_or_runner.is_a?(Runner) ? hosts_or_runner : Runner.new(hosts_or_runner)
+      @app_path        = app_path
+      @branch          = branch
+      @hooks           = {}
+      @tracking        = "#{TRACKING_DIR}/#{File.basename(app_path)}/"
+      @check_block     = nil
+      @allow_untracked = allow_untracked
 
       return unless hooks_dir
 
@@ -52,11 +53,12 @@ module Herd
     private
 
     def run_deploy(pull:, fix: true, &after)
-      hooks       = @hooks
-      app_path    = @app_path
-      tracking    = @tracking
-      branch      = @branch
-      check_block = @check_block
+      hooks            = @hooks
+      app_path         = @app_path
+      tracking         = @tracking
+      branch           = @branch
+      check_block      = @check_block
+      allow_untracked  = @allow_untracked
 
       @runner.exec do
         run("mkdir -p #{tracking}")
@@ -68,7 +70,8 @@ module Herd
           end
 
           if pull
-            dirty = run("git status --porcelain").strip
+            porcelain_flags = allow_untracked ? "--untracked-files=no" : ""
+            dirty = run("git status --porcelain #{porcelain_flags}").strip
             raise Herd::CommandError, "uncommitted changes on server, aborting deploy" unless dirty.empty?
           end
         end
