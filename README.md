@@ -4,8 +4,6 @@ Fast host configuration tool.
 
 ## TODO
 
-* [ ] Bug: do not work with ssh config files
-* [ ] Ask password
 * [ ] ANSI terminal
 * [ ] Parallel execution
   * [ ] Add new parameter to "#exec". By default it will be :sequential execution, optionally :parallel
