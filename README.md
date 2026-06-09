@@ -2,14 +2,6 @@
 
 Fast host configuration tool.
 
-## TODO
-
-* [ ] Parallel execution
-  * [ ] Add new parameter to "#exec". By default it will be :sequential execution, optionally :parallel
-        for parallel execution you can add `:depends_on` for child task and `:label` for parent one.
-  * [ ] for sequential execution you can add parallel block in any place
-* [ ] Interpret Dockerfile
-
 ## Installation
 
 Install from git until the gem is published to RubyGems:
