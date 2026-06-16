@@ -46,8 +46,16 @@ module Herd
       @pre_pull_block = block
     end
 
-    def deploy(&)
-      run_deploy(pull: true, &)
+    def post_pull(&block)
+      @post_pull_block = block
+    end
+
+    def after(&block)
+      @after_block = block
+    end
+
+    def deploy
+      run_deploy(pull: true)
     end
 
     def check_hooks(dry_run: true, &after)
@@ -56,13 +64,15 @@ module Herd
 
     private
 
-    def run_deploy(pull:, fix: true, &after)
+    def run_deploy(pull:, fix: true, &inline_after)
       hooks            = @hooks
       app_path         = @app_path
       tracking         = @tracking
       branch           = @branch
       check_block      = @check_block
       pre_pull_block   = @pre_pull_block
+      post_pull_block  = @post_pull_block
+      after_block      = @after_block
       allow_untracked  = @allow_untracked
 
       @runner.exec do
@@ -84,6 +94,7 @@ module Herd
         if pull
           instance_exec(&pre_pull_block) if pre_pull_block
           run("git -C #{app_path} pull")
+          within(app_path) { instance_exec(&post_pull_block) } if post_pull_block
         end
 
         within(app_path) do
@@ -124,7 +135,8 @@ module Herd
             info("all hooks applied")
           end
 
-          instance_exec(&after) if after
+          instance_exec(&after_block) if after_block
+          instance_exec(&inline_after) if inline_after
         end
       ensure
         begin
