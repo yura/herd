@@ -23,6 +23,10 @@ module Herd
         os_id == "ubuntu"
       end
 
+      def os_codename?(*names)
+        names.include?(os_codename)
+      end
+
       # Accepts any Gem::Requirement operator(s), e.g. ubuntu_version?(">= 24.04", "< 26.04")
       def ubuntu_version?(*requirements)
         ubuntu? && Gem::Requirement.new(*requirements).satisfied_by?(Gem::Version.new(os_version))

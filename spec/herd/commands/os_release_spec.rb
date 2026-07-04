@@ -84,6 +84,20 @@ RSpec.describe Herd::Commands::OsRelease do
     end
   end
 
+  describe "#os_codename?" do
+    it "returns true when the codename matches" do
+      expect(session.os_codename?("noble")).to be true
+    end
+
+    it "returns true when the codename matches any of several names" do
+      expect(session.os_codename?("jammy", "noble")).to be true
+    end
+
+    it "returns false when the codename matches none" do
+      expect(session.os_codename?("jammy", "resolute")).to be false
+    end
+  end
+
   describe "#ubuntu?" do
     it "returns true on Ubuntu" do
       expect(session.ubuntu?).to be true
