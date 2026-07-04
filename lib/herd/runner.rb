@@ -10,6 +10,11 @@ module Herd
     end
 
     def exec(command = nil, &)
+      if hosts.empty?
+        puts "runner: no hosts to run against — nothing to run"
+        return []
+      end
+
       threads = hosts.map do |host|
         Thread.new { host.exec(command, &) }
       end
