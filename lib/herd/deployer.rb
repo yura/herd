@@ -87,22 +87,18 @@ module Herd
       @runner.exec do
         run("mkdir -p #{tracking}")
 
-        within(app_path) do
-          current_branch = run("git rev-parse --abbrev-ref HEAD").strip
-          if current_branch != branch
-            info("warning: expected branch '#{branch}', got '#{current_branch}' — hooks will run against '#{branch}' commits")
-          end
-
-          if pull
-            porcelain_flags = allow_untracked ? "--untracked-files=no" : ""
-            dirty = run("git status --porcelain #{porcelain_flags}").strip
-            raise Herd::CommandError, "uncommitted changes on server, aborting deploy" unless dirty.empty?
-          end
+        current_branch = git_current_branch(app_path)
+        if current_branch != branch
+          info("warning: expected branch '#{branch}', got '#{current_branch}' — hooks will run against '#{branch}' commits")
         end
 
         if pull
+          if git_dirty?(app_path, ignore_untracked: allow_untracked)
+            raise Herd::CommandError, "uncommitted changes on server, aborting deploy"
+          end
+
           instance_exec(&pre_pull_block) if pre_pull_block
-          run("git -C #{app_path} pull")
+          git_pull(app_path)
           within(app_path) { instance_exec(&post_pull_block) } if post_pull_block
         end
 
@@ -111,15 +107,7 @@ module Herd
           unapplied = hooks.keys - applied
 
           if unapplied.any?
-            check = run("printf '#{unapplied.join("\\n")}' | git cat-file --batch-check")
-                    .split(/\r?\n/).map(&:strip).reject(&:empty?)
-
-            existing = check.select { |l| l.include?(" commit ") }
-                            .map    { |l| l.split.first }
-
-            pending = existing.sort_by do |sha|
-              run("git log -1 --format=%ct #{sha}").strip.to_i
-            end
+            pending = git_commits_exist(app_path, *unapplied).sort_by { |sha| git_commit_time(app_path, sha) }
 
             if pending.empty?
               info("no pending hooks found in git log")
