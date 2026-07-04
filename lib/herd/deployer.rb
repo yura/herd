@@ -5,16 +5,25 @@ module Herd
     TRACKING_DIR = "~/.herd_deploy"
 
     class Hook
-      attr_reader :sha, :name, :pre_conditions_block, :actions_block, :checks_block
+      attr_reader :sha, :name, :pre_conditions_block, :actions_block, :checks_block,
+                  :skip_on_hosts, :only_on_hosts, :skip_tags, :only_tags
 
       def initialize(sha, name)
-        @sha  = sha
-        @name = name
+        @sha           = sha
+        @name          = name
+        @skip_on_hosts = []
+        @only_on_hosts = []
+        @skip_tags     = []
+        @only_tags     = []
       end
 
       def pre_conditions(&block) = @pre_conditions_block = block
       def actions(&block)        = @actions_block = block
       def checks(&block)         = @checks_block = block
+      def skip_on(*hostnames)    = @skip_on_hosts = hostnames.flatten
+      def only_on(*hostnames)    = @only_on_hosts = hostnames.flatten
+      def skip_tagged(*tags)     = @skip_tags = tags.flatten
+      def only_tagged(*tags)     = @only_tags = tags.flatten
     end
 
     def initialize(hosts_or_runner, app_path:, branch: "main", hooks_dir: nil, allow_untracked: false)
@@ -118,6 +127,12 @@ module Herd
               pending.each do |sha|
                 hook = hooks[sha]
 
+                hostname  = host.vars[:hostname]
+                host_tags = Array(host.vars[:tags])
+                next if hook.skip_on_hosts.include?(hostname)
+                next if hook.only_on_hosts.any? && !hook.only_on_hosts.include?(hostname)
+                next if hook.skip_tags.any? && (hook.skip_tags & host_tags).any?
+                next if hook.only_tags.any? && (hook.only_tags & host_tags).none?
                 next if hook.pre_conditions_block && !instance_exec(&hook.pre_conditions_block)
 
                 if fix
