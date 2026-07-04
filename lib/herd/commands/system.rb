@@ -20,6 +20,15 @@ module Herd
 
         info("hostname set to #{hostname}")
       end
+
+      # Named system_timezone (not timezone) to avoid colliding with the very
+      # common local variable name "timezone" in recipes. Not cached, unlike
+      # os_release — recipes routinely change the timezone (timedatectl) within
+      # a connection, and a stale cached value would silently mislead callers
+      # later in the same run.
+      def system_timezone
+        run("cat /etc/timezone").strip
+      end
     end
   end
 end

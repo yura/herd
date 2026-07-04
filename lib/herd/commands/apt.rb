@@ -28,6 +28,12 @@ module Herd
       def apt_installed?(package)
         run("dpkg -l #{package} 2>/dev/null | grep -q '^ii' && echo yes || echo no").strip == "yes"
       end
+
+      # Returns the installed version string, or nil if the package isn't installed.
+      def apt_version(package)
+        version = run("dpkg-query -W -f='${Version}' #{package} 2>/dev/null || true").strip
+        version.empty? ? nil : version
+      end
     end
   end
 end
