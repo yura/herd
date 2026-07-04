@@ -127,7 +127,7 @@ module Herd
       end
 
       ssh.loop { exit_code.nil? }
-      output = stderr_output || raw_bytes.force_encoding("UTF-8")
+      output = stderr_output || raw_bytes.dup.force_encoding("UTF-8")
 
       output_with_code = { output: output, exit_code: exit_code }
       process_output(channel, command, started_at, output_with_code, result, caller_method)
