@@ -54,6 +54,9 @@ module Herd
           end
 
           apt_verify_repo_key!(keyring_path, fingerprint) if fingerprint
+
+          # apt's sandboxed _apt user needs to read the keyring during update/install.
+          file_permissions(keyring_path, 644)
         end
 
         expect_file_content_equals(sources_path, "#{sources_line}\n")
