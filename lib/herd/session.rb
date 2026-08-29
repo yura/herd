@@ -108,7 +108,9 @@ module Herd
     def channel_run(channel, command, result, started_at, caller_method = nil)
       log_command_start(started_at, command, caller_method)
 
-      output, exit_code = nil
+      raw_bytes = "".b
+      exit_code = nil
+      stderr_output = nil
       channel.exec("set -o pipefail; #{command}") do |c, _|
         c.on_data do |_, data|
           data_utf8 = data.dup.force_encoding("UTF-8")
@@ -117,14 +119,15 @@ module Herd
           else
             # strip ANSI escape codes produced by PTY before printing
             print data.gsub(/\e\[[0-9;]*[A-Za-z]|\e./, "") if ENV["HERD_STREAM"]
-            output = output.to_s + data.encode("UTF-8", "BINARY", invalid: :replace, undef: :replace)
+            raw_bytes << data.b
           end
         end
-        c.on_extended_data { |_, _, data| output = data }
+        c.on_extended_data { |_, _, data| stderr_output = data }
         c.on_request("exit-status") { |_, data| exit_code = data.read_long }
       end
 
       ssh.loop { exit_code.nil? }
+      output = stderr_output || raw_bytes.dup.force_encoding("UTF-8")
 
       output_with_code = { output: output, exit_code: exit_code }
       process_output(channel, command, started_at, output_with_code, result, caller_method)
