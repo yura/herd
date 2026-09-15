@@ -26,7 +26,10 @@ module Herd
       def only_tagged(*tags)     = @only_tags = tags.flatten
     end
 
-    def initialize(hosts_or_runner, app_path:, branch: "main", hooks_dir: nil, allow_untracked: false)
+    # strict_branch: false keeps the historical behaviour of deploying whatever
+    # branch the host is on, warning about the mismatch.
+    def initialize(hosts_or_runner, app_path:, branch: "main", hooks_dir: nil, allow_untracked: false,
+                   strict_branch: false)
       @runner          = hosts_or_runner.is_a?(Runner) ? hosts_or_runner : Runner.new(hosts_or_runner)
       @app_path        = app_path
       @branch          = branch
@@ -34,6 +37,7 @@ module Herd
       @tracking        = "#{TRACKING_DIR}/#{File.basename(app_path)}/"
       @check_block     = nil
       @allow_untracked = allow_untracked
+      @strict_branch   = strict_branch
 
       return unless hooks_dir
 
@@ -83,6 +87,7 @@ module Herd
       post_pull_block  = @post_pull_block
       after_block      = @after_block
       allow_untracked  = @allow_untracked
+      strict_branch    = @strict_branch
 
       @runner.exec do
         run("mkdir -p #{tracking}")
@@ -93,12 +98,16 @@ module Herd
         end
 
         if pull
-          if git_dirty?(app_path, ignore_untracked: allow_untracked)
-            raise Herd::CommandError, "uncommitted changes on server, aborting deploy"
+          # The block runs after git_sync!'s refusals and before the merge, so a
+          # deploy that is going to be refused never stops the app's services.
+          sync_options = { ignore_untracked: allow_untracked, strict_branch: strict_branch }
+
+          changed = git_sync!(app_path, branch, **sync_options) do
+            instance_exec(&pre_pull_block) if pre_pull_block
           end
 
-          instance_exec(&pre_pull_block) if pre_pull_block
-          git_pull(app_path)
+          info(changed.empty? ? "already up to date" : "updated #{changed.size} file(s)")
+
           within(app_path) { instance_exec(&post_pull_block) } if post_pull_block
         end
 
