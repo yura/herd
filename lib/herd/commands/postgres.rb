@@ -16,6 +16,12 @@ module Herd
         within("/") { sudo("-u postgres #{psql_command(sql, db: db, vars: vars)}") }.strip
       end
 
+      # Rows as hashes keyed by column name, built by Postgres itself via json_agg.
+      # sql is a single SELECT without a trailing semicolon.
+      def psql_json(sql, db: nil, vars: {})
+        JSON.parse(psql("SELECT coalesce(json_agg(q), '[]'::json) FROM (#{sql}) q", db: db, vars: vars))
+      end
+
       def pg_role_exists?(name)
         psql("SELECT 1 FROM pg_roles WHERE rolname = :'name'", vars: { name: name }) == "1"
       end

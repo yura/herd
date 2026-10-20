@@ -14,7 +14,7 @@ RSpec.describe Herd::Commands::System do
     allow(mock_ssh_channel).to receive(:on_request).with("exit-status")
                                                    .and_yield(nil, instance_double(Net::SSH::Buffer, read_long: 0))
     allow(mock_ssh_channel).to receive(:exec)
-      .with("set -o pipefail; cat /etc/timezone")
+      .with("set -o pipefail; timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone")
       .and_yield(mock_ssh_channel, nil)
     allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "Europe/Paris\n")
   end

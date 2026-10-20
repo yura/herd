@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
 require_relative "herd/version"
+
+module Herd
+  # Top line of files Herd writes; defined before commands load, which use it in constants.
+  MANAGED_HEADER = "# Managed by Herd. Do not edit manually."
+end
+
 require_relative "herd/log"
 require_relative "herd/host"
 require_relative "herd/inventory"

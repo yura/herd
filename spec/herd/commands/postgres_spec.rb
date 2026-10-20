@@ -33,6 +33,16 @@ RSpec.describe Herd::Commands::Postgres do
     end
   end
 
+  describe "#psql_json" do
+    it "wraps the query in json_agg and parses rows, including multi-line output" do
+      allow(session).to receive(:psql).and_return(%([{"a":1,"b":"x"}, \r\n {"a":2,"b":null}]))
+
+      expect(session.psql_json("SELECT a, b FROM t", db: "app")).to eq([{ "a" => 1, "b" => "x" }, { "a" => 2, "b" => nil }])
+      expect(session).to have_received(:psql)
+        .with("SELECT coalesce(json_agg(q), '[]'::json) FROM (SELECT a, b FROM t) q", db: "app", vars: {})
+    end
+  end
+
   describe "#pg_role_exists?" do
     it "passes the name as a psql variable" do
       allow(session).to receive(:psql).and_return("1")

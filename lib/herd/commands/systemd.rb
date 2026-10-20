@@ -63,7 +63,7 @@ module Herd
           actions.map { |action| "#{user} ALL=(ALL) NOPASSWD: /usr/bin/systemctl #{action} #{unit}.service" }
         end
 
-        content = "# Managed by Herd. Do not edit manually.\n\n#{lines.join("\n")}\n"
+        content = "#{Herd::MANAGED_HEADER}\n\n#{lines.join("\n")}\n"
         expect_file_content_equals(sudoers_path, content)
         file_permissions(sudoers_path, 440)
       end

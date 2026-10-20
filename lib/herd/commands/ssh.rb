@@ -61,9 +61,18 @@ module Herd
         ssh_chmod("~/.ssh/known_hosts",     600) if file_exists?("~/.ssh/known_hosts")
         run("find ~/.ssh -name '*.pub' ! -perm 644 -exec chmod 644 {} \\;")
         run("find ~/.ssh -name 'id_*' ! -name '*.pub' ! -perm 600 -exec chmod 600 {} \\;")
+        ssh_herd_dirs_permissions
       end
 
       private
+
+      # The dirs ssh_deploy_key creates: 700, files inside 600 (public keys are handled above).
+      # One round trip; missing dirs are skipped, a failing chmod raises.
+      def ssh_herd_dirs_permissions
+        dirs  = [DEPLOY_KEYS_DIR, CONFIG_D_DIR, KNOWN_HOSTS_DIR].join(" ")
+        files = %(find "$d" -type f ! -name '*.pub' ! -perm 600 -exec chmod 600 {} +)
+        run(%(for d in #{dirs}; do [ -d "$d" ] || continue; chmod 700 "$d" || exit 1; #{files} || exit 1; done))
+      end
 
       def ssh_chmod(path, mode)
         current = run("stat -c %a #{path}").strip

@@ -3,6 +3,7 @@
 require "diff/lcs"
 require "diff/lcs/hunk"
 require "rsync"
+require "shellwords"
 
 module Herd
   module Commands
@@ -27,6 +28,18 @@ module Herd
 
       def symlink?(path)
         run("test -L #{path} && echo yes || echo no").chomp == "yes"
+      end
+
+      # Points link at target, replacing a stale link or file. Returns true if it had to.
+      # A leading ~/ is the remote home; a real directory at link fails rm -f.
+      def ensure_symlink(link, target, sudo: false)
+        link   = remote_home_path(link).shellescape
+        target = remote_home_path(target)
+        # ln stores the expanded path, so compare against that, not "~/...".
+        return false if run("readlink #{link} || true").strip == target
+
+        [%(rm -f #{link}), %(ln -s #{target.shellescape} #{link})].each { |cmd| sudo ? sudo(cmd) : run(cmd) }
+        true
       end
 
       # Returns nil if the file doesn't exist, false if it exists but doesn't contain content, true if it does.
@@ -176,6 +189,14 @@ module Herd
 
       def file_permissions(path, mode)
         sudo("chmod #{mode} #{path}")
+      end
+
+      # "~/x" as an absolute remote path, so it survives shellescape. Home is fetched once per session.
+      def remote_home_path(path)
+        return path unless path.start_with?("~/")
+
+        @remote_home ||= run('printf %s "$HOME"').strip
+        "#{@remote_home}#{path[1..]}"
       end
 
       def rsync(source, remote_path, params)
