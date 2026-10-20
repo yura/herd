@@ -27,6 +27,53 @@ RSpec.describe Herd::Commands::Ssh do
     end
   end
 
+  describe "#sshd_disable_accept_env" do
+    let(:tmp) { "/tmp/tmp.abc" }
+
+    before do
+      allow(session).to receive_messages(mktemp: tmp, command_success?: true)
+      allow(session).to receive(:run).and_return("")
+      allow(session).to receive(:sudo)
+      allow(session).to receive(:systemctl_reload)
+    end
+
+    it "edits a copy, validates it, installs it, then reloads sshd" do
+      expect(session.sshd_disable_accept_env).to be(true)
+
+      expect(session).to have_received(:run).with("sed 's/^AcceptEnv/#AcceptEnv/' /etc/ssh/sshd_config > #{tmp}").ordered
+      expect(session).to have_received(:sudo).with("sshd -t -f #{tmp}").ordered
+      expect(session).to have_received(:sudo).with("install -m 644 -o root -g root -- #{tmp} /etc/ssh/sshd_config").ordered
+      expect(session).to have_received(:systemctl_reload).with("ssh").ordered
+      expect(session).to have_received(:run).with("rm -f -- #{tmp}")
+    end
+
+    it "leaves sshd alone when AcceptEnv is already off" do
+      allow(session).to receive(:command_success?).and_return(false)
+
+      expect(session.sshd_disable_accept_env).to be(false)
+      expect(session).not_to have_received(:sudo)
+    end
+
+    it "keeps the original and skips the reload when sshd -t rejects the copy" do
+      allow(session).to receive(:sudo).with("sshd -t -f #{tmp}").and_raise(Herd::CommandError, "bad config")
+
+      expect { session.sshd_disable_accept_env }.to raise_error(Herd::CommandError, /bad config/)
+      expect(session).not_to have_received(:sudo).with(/install/)
+      expect(session).not_to have_received(:systemctl_reload)
+      expect(session).to have_received(:run).with("rm -f -- #{tmp}")
+    end
+  end
+
+  describe "#sshd_reload" do
+    it "doesn't reload a config sshd -t rejects" do
+      allow(session).to receive(:sudo).with("sshd -t").and_raise(Herd::CommandError, "bad config")
+      allow(session).to receive(:systemctl_reload)
+
+      expect { session.sshd_reload }.to raise_error(Herd::CommandError)
+      expect(session).not_to have_received(:systemctl_reload)
+    end
+  end
+
   describe "#ssh_deploy_key" do
     let(:written) { {} }
 

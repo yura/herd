@@ -11,18 +11,11 @@ module Herd
       def authorized_keys_sync(keys, remove_unknown: false)
         lines   = authorized_keys
         current = lines.reject { |line| line.start_with?("#") || line.strip.empty? }
-        unknown = current - keys
-        unless unknown.empty? || remove_unknown
-          raise Herd::CommandError, "unknown keys in authorized_keys:\n#{unknown.join("\n")}"
-        end
+        refuse_unknown_keys!(current - keys) unless remove_unknown
 
         changed = current != keys || lines.first != Herd::MANAGED_HEADER
-        if changed
-          self.authorized_keys = [Herd::MANAGED_HEADER] + keys
-          info("authorized_keys updated: #{keys.count} keys")
-        else
-          info("authorized_keys already up to date, skipping")
-        end
+        self.authorized_keys = [Herd::MANAGED_HEADER] + keys if changed
+        info(changed ? "authorized_keys updated: #{keys.count} keys" : "authorized_keys already up to date, skipping")
 
         ssh_set_permissions
         changed
@@ -56,6 +49,12 @@ module Herd
       end
 
       private
+
+      def refuse_unknown_keys!(unknown)
+        return if unknown.empty?
+
+        raise Herd::CommandError, "unknown keys in authorized_keys:\n#{unknown.join("\n")}"
+      end
 
       def keys_diff(actual_keys, required_keys)
         result = Hash.new { |h, k| h[k] = [] }

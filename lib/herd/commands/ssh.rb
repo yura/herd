@@ -10,6 +10,7 @@ module Herd
       CONFIG_D_DIR     = "~/.ssh/config.d"
       KNOWN_HOSTS_DIR  = "~/.ssh/known_hosts.d"
       CONFIG_D_INCLUDE = "Include ~/.ssh/config.d/*.conf"
+      SSHD_CONFIG      = "/etc/ssh/sshd_config"
       GITHUB_META_URL  = "https://api.github.com/meta"
       GITHUB_META_LOCK = Mutex.new
 
@@ -52,6 +53,30 @@ module Herd
 
         ssh_private_file("#{CONFIG_D_DIR}/#{name}.conf", ssh_alias_config(name, git_host, key_path, known_hosts_path))
         pub_key
+      end
+
+      # Stops sshd taking the client's LANG/LC_*: a Mac sends e.g. LC_CTYPE=UTF-8, unknown
+      # on Linux, which breaks locale-sensitive tools. Returns true if the config changed.
+      # The edited copy is validated before it replaces the original, so a rejected
+      # config never lands on disk (where it could stop sshd starting after a reboot).
+      def sshd_disable_accept_env
+        return false unless command_success?("grep -q '^AcceptEnv' #{SSHD_CONFIG}")
+
+        tmp = mktemp
+        run("sed 's/^AcceptEnv/#AcceptEnv/' #{SSHD_CONFIG} > #{shell_path(tmp)}")
+        sudo("sshd -t -f #{shell_path(tmp)}")
+        sudo("install -m 644 -o root -g root -- #{shell_path(tmp)} #{SSHD_CONFIG}")
+        systemctl_reload("ssh")
+        true
+      ensure
+        run("rm -f -- #{shell_path(tmp)}") if tmp
+      end
+
+      # Validates the config first: reloading a broken one can lock you out.
+      # The service is "ssh" on Ubuntu, not "sshd".
+      def sshd_reload
+        sudo("sshd -t")
+        systemctl_reload("ssh")
       end
 
       def ssh_set_permissions
