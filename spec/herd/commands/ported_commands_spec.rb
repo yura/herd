@@ -12,11 +12,9 @@ RSpec.describe "commands ported from footbot recipes" do # rubocop:disable RSpec
 
   # Runs commands in a real shell with HOME pointed at a scratch dir.
   def run_locally(env = {})
-    allow(session).to receive(:run) do |cmd|
+    allow(session).to receive(:run_result) do |cmd|
       out, status = Open3.capture2e({ "HOME" => home }.merge(env), "bash", "-c", cmd)
-      raise Herd::CommandError, out unless status.success?
-
-      out
+      Herd::CommandResult.new(output: out, exit_code: status.exitstatus)
     end
   end
 

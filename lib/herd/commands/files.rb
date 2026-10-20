@@ -9,36 +9,107 @@ module Herd
   module Commands
     FILES = "files"
 
-    # Create, read, write, remove files, check permssions.
+    # Create, read, write, remove files, check permissions.
+    #
+    # A string means one of three things, depending on the method:
+    #
+    #   read_file("~/logs/*.log")  # one file, literally named "*.log"
+    #   glob("~/logs/*.log")       # the files that match, as an array
+    #   run("ls ~/logs/*.log")     # a shell command you write yourself
+    #
+    # File commands (read_file, write_to_file, file, ensure_symlink, mkdir_p,
+    # file_permissions, ...) take one concrete path:
+    # - spaces, quotes, $, *, ? are passed literally;
+    # - "~" and "~/..." are the SSH user's home on the remote host, also with sudo: true;
+    # - relative paths stay relative (to +within+, if any) — except a symlink target,
+    #   which the kernel resolves from the link's own directory;
+    # - paths go through {#shell_path} and get "--" where the command supports it.
+    #
+    # For a wildcard use {#glob} and act on each path. In +run+/+sudo+ the shell is
+    # yours; put a path into it with {#shell_path}:
+    #
+    #   run("find #{shell_path("~/my logs")} -name '*.log' -mtime +7")
     module Files
       class FileNotFound < StandardError; end
       class PermissionDeniedError < StandardError; end
 
+      # A remote path as one shell word: "~" and "~/..." mean the SSH user's home,
+      # everything else (spaces, quotes, $) stays literal.
+      #
+      # @param path [String]
+      # @return [String] ready to drop into a command
+      def shell_path(path)
+        path = path.to_s
+        return '"$HOME"' if path == "~"
+        return %("$HOME"/#{path.delete_prefix("~/").shellescape}) if path.start_with?("~/")
+
+        path.shellescape
+      end
+
+      # Expands pattern on the remote host. Only *, ? and [...] are wildcards; $(), backticks
+      # and ; are never run. "~/" is the SSH user's home, also with sudo: true.
+      # Names come back hex-encoded, so spaces and newlines in them survive the PTY:
+      # use the array as is, don't split command output instead.
+      #
+      #   glob("~/logs/*.log").each { |path| file_permissions(path, 640) }
+      #
+      # @param pattern [String]
+      # @param sudo [Boolean] list as root, e.g. directories the user can't read
+      # @return [Array<String>] matching paths, sorted; [] when nothing matches
+      def glob(pattern, sudo: false)
+        hex     = %(printf '%s' "$f" | od -An -tx1 | tr -d ' \\n'; echo)
+        # nullglob only drops patterns with wildcards; a plain path comes through as-is, hence the -e/-L check.
+        exists  = %([ -e "$f" ] || [ -L "$f" ] || continue)
+        script  = "shopt -s nullglob; for f in #{glob_pattern(pattern)}; do #{exists}; #{hex}; done"
+        command = %(bash -c #{script.shellescape} _ "$HOME")
+        output  = sudo ? sudo(command) : run(command)
+        output.split.map { |hex| [hex].pack("H*").force_encoding(Encoding::UTF_8) }.sort
+      end
+
+      # Escapes everything but the wildcards; inside [...] only plain class characters pass.
+      def glob_pattern(pattern)
+        home, rest = pattern.start_with?("~/") ? ['"$1"/', pattern.delete_prefix("~/")] : ["", pattern]
+        in_class   = false
+
+        home + rest.each_char.map do |char|
+          if in_class
+            in_class = false if char == "]"
+            char.match?(/[\w.!^\-\]]/) ? char : "\\#{char}"
+          elsif char == "["
+            in_class = true
+            char
+          else
+            "*?".include?(char) ? char : Shellwords.escape(char)
+          end
+        end.join
+      end
+
       def file_exists?(path)
-        run("test -e #{path} && echo yes || echo no").chomp == "yes"
+        path_test?("-e", path)
       end
 
       def file_readable?(path)
-        run("test -r #{path} && echo yes || echo no").chomp == "yes"
+        path_test?("-r", path)
       end
 
       def file_writable?(path)
-        run("test -w #{path} && echo yes || echo no").chomp == "yes"
+        path_test?("-w", path)
       end
 
       def symlink?(path)
-        run("test -L #{path} && echo yes || echo no").chomp == "yes"
+        path_test?("-L", path)
       end
 
       # Points link at target, replacing a stale link or file. Returns true if it had to.
-      # A leading ~/ is the remote home; a real directory at link fails rm -f.
+      # A relative target is stored as is and resolves from the link's directory, not +within+.
+      # The check compares in the shell, so "~/x" matches the expanded path ln stored.
+      # A real directory at link fails rm -f.
       def ensure_symlink(link, target, sudo: false)
-        link   = remote_home_path(link).shellescape
-        target = remote_home_path(target)
-        # ln stores the expanded path, so compare against that, not "~/...".
-        return false if run("readlink #{link} || true").strip == target
+        link   = shell_path(link)
+        target = shell_path(target)
+        return false if command_success?(%([ "$(readlink -- #{link})" = #{target} ]))
 
-        [%(rm -f #{link}), %(ln -s #{target.shellescape} #{link})].each { |cmd| sudo ? sudo(cmd) : run(cmd) }
+        ["rm -f -- #{link}", "ln -s -- #{target} #{link}"].each { |cmd| sudo ? sudo(cmd) : run(cmd) }
         true
       end
 
@@ -51,23 +122,22 @@ module Herd
 
       # Always appends \n to content — otherwise the prepended line merges with the first line of the file.
       def prepend_to_file(path, content, sudo: false)
-        unless file_exists?(path)
-          touch path
-        end
+        run("touch -- #{shell_path(path)}") unless file_exists?(path)
 
         content = "#{content}\n" unless content.end_with?("\n")
 
         tmp = mktemp
         write_to_file(tmp, content)
-        run("cat #{path} >> #{tmp}") if !file_contains?(path, content).nil?
-        run("chmod --reference=#{path.sub(/\A~/, '$HOME')} #{tmp}")
-        sudo ? sudo("mv #{tmp} #{path}") : run("mv #{tmp} #{path}")
+        run("cat -- #{shell_path(path)} >> #{shell_path(tmp)}") unless file_contains?(path, content).nil?
+        run("chmod --reference=#{shell_path(path)} -- #{shell_path(tmp)}")
+        move = "mv -- #{shell_path(tmp)} #{shell_path(path)}"
+        sudo ? sudo(move) : run(move)
 
         # FIXME: need to delete tmp file?
       end
 
       def ensure_line_in_file(path, line, sudo: false)
-        touch path unless file_exists?(path)
+        run("touch -- #{shell_path(path)}") unless file_exists?(path)
 
         return if file_contains?(path, line)
 
@@ -76,7 +146,7 @@ module Herd
 
       def replace_line_in_file(path, pattern, replacement, sudo: false)
         escaped = replacement.gsub("/", "\\/")
-        cmd = "sed -i 's/#{pattern.source}/#{escaped}/' #{path}"
+        cmd = "sed -i -e 's/#{pattern.source}/#{escaped}/' -- #{shell_path(path)}"
         sudo ? sudo(cmd) : run(cmd)
       end
 
@@ -97,11 +167,8 @@ module Herd
       end
 
       def mkdir_p(path, user, group, sudo: false, mode: nil)
-        if sudo
-          sudo("mkdir -p #{path}")
-        else
-          run("mkdir -p #{path}")
-        end
+        cmd = "mkdir -p -- #{shell_path(path)}"
+        sudo ? sudo(cmd) : run(cmd)
 
         file_user_and_group(path, user, group) if user && group
         file_permissions(path, mode) if mode
@@ -138,7 +205,8 @@ module Herd
       end
 
       def read_file(path, sudo: false)
-        result = (sudo ? sudo("cat #{path}") : run("cat #{path}"))&.chomp
+        cmd    = "cat -- #{shell_path(path)}"
+        result = (sudo ? sudo(cmd) : run(cmd))&.chomp
         result = result.sub(/\A(\r\n|\r|\n)/, "") if sudo
         result
       end
@@ -158,45 +226,30 @@ module Herd
       end
 
       def write_to_file(path, content, sudo: false)
-        content = "#{content}\n" unless content.end_with?("\n")
-        if sudo
-          sudo(%(tee #{path} > /dev/null << "EOF"
-#{content}EOF))
-        else
-          run(%(tee #{path} > /dev/null << "EOF"
-#{content}EOF))
-        end
+        tee_heredoc("tee -- #{shell_path(path)} > /dev/null", content, sudo: sudo)
       end
 
       def append_to_file(path, content, sudo: false)
+        tee_heredoc("tee -a -- #{shell_path(path)}", content, sudo: sudo)
+      end
+
+      # Quoted delimiter: content goes in literally. HERD_EOF, so a line reading "EOF" can't end it early.
+      def tee_heredoc(tee, content, sudo: false)
         content = "#{content}\n" unless content.end_with?("\n")
-        if sudo
-          sudo(%(tee -a #{path} << "EOF"
-#{content}EOF))
-        else
-          run(%(tee -a #{path} << "EOF"
-#{content}EOF))
-        end
+        cmd = %(#{tee} << "HERD_EOF"\n#{content}HERD_EOF)
+        sudo ? sudo(cmd) : run(cmd)
       end
 
       def dir_user_and_group(path, user, group)
-        sudo("chown -R #{user}:#{group} #{path}")
+        sudo("chown -R -- #{user}:#{group} #{shell_path(path)}")
       end
 
       def file_user_and_group(path, user, group)
-        sudo("chown #{user}:#{group} #{path}")
+        sudo("chown -- #{user}:#{group} #{shell_path(path)}")
       end
 
       def file_permissions(path, mode)
-        sudo("chmod #{mode} #{path}")
-      end
-
-      # "~/x" as an absolute remote path, so it survives shellescape. Home is fetched once per session.
-      def remote_home_path(path)
-        return path unless path.start_with?("~/")
-
-        @remote_home ||= run('printf %s "$HOME"').strip
-        "#{@remote_home}#{path[1..]}"
+        sudo("chmod -- #{mode} #{shell_path(path)}")
       end
 
       def rsync(source, remote_path, params)
@@ -225,6 +278,12 @@ module Herd
 
         diffs = Diff::LCS.diff actual, required
         Diff::LCS::Hunk.new(actual, required, diffs[0], 3, 0).diff(:unified)
+      end
+
+      private
+
+      def path_test?(flag, path)
+        command_success?("test #{flag} #{shell_path(path)}")
       end
     end
   end

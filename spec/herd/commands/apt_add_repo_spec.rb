@@ -34,7 +34,7 @@ RSpec.describe Herd::Commands::Apt do
 
       it "makes the freshly-fetched keyring world-readable for apt's sandboxed _apt user" do
         session.apt_add_repo(sources_path, sources_line, keyring_path: keyring_path, keyring_url: keyring_url)
-        expect(session).to have_received(:sudo).with("chmod 644 #{keyring_path}")
+        expect(session).to have_received(:sudo).with("chmod -- 644 #{keyring_path}")
       end
 
       it "writes the sources file and refreshes apt" do
@@ -111,7 +111,7 @@ RSpec.describe Herd::Commands::Apt do
                                                            fingerprint: fingerprint)
 
         expect(session).to have_received(:sudo).with("curl -fsSL -o #{keyring_path} #{keyring_url}")
-        expect(session).to have_received(:sudo).with("chmod 644 #{keyring_path}")
+        expect(session).to have_received(:sudo).with("chmod -- 644 #{keyring_path}")
         expect(session).to have_received(:expect_file_content_equals)
       end
     end

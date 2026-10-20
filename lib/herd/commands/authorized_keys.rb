@@ -50,7 +50,7 @@ module Herd
       end
 
       def add_authorized_key(key)
-        touch(AUTHORIZED_KEYS_FILE)
+        run("touch -- #{shell_path(AUTHORIZED_KEYS_FILE)}")
         append_to_file(AUTHORIZED_KEYS_FILE, key)
         file_permissions(AUTHORIZED_KEYS_FILE, 600)
       end

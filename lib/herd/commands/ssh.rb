@@ -75,8 +75,8 @@ module Herd
       end
 
       def ssh_chmod(path, mode)
-        current = run("stat -c %a #{path}").strip
-        run("chmod #{mode} #{path}") unless current == mode.to_s
+        current = run("stat -c %a -- #{shell_path(path)}").strip
+        run("chmod -- #{mode} #{shell_path(path)}") unless current == mode.to_s
       end
 
       # Include must precede any Host block, hence prepend.
@@ -89,7 +89,7 @@ module Herd
 
       # Touched as the user first, so the write needs neither sudo nor chown.
       def ssh_private_file(path, content)
-        run("touch #{path} && chmod 600 #{path}")
+        run("touch -- #{shell_path(path)} && chmod -- 600 #{shell_path(path)}")
         expect_file_content_equals(path, content)
       end
 
