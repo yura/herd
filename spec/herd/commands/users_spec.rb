@@ -28,6 +28,21 @@ RSpec.describe Herd::Commands::Users do
     expect(Herd::Session.ancestors).to include(described_class)
   end
 
+  describe "#user_exists?" do
+    # Runs the real command through a shell: id's own output must not reach the comparison.
+    before do
+      allow(session).to receive(:run) { |cmd| Open3.capture2("bash", "-c", cmd).first }
+    end
+
+    it "is true for an existing user" do
+      expect(session.user_exists?(Etc.getlogin || ENV.fetch("USER"))).to be(true)
+    end
+
+    it "is false for a missing user" do
+      expect(session.user_exists?("herd_no_such_user")).to be(false)
+    end
+  end
+
   describe "#change_password" do
     # Regression test: a naive string-match spec (asserting the exact command
     # sent to Net::SSH) would just re-encode a quoting bug if the "expected"
@@ -47,6 +62,16 @@ RSpec.describe Herd::Commands::Users do
 
       expect(status).to be_success
       expect(stdout.strip).to eq("footbot:s3cr3tPass9")
+    end
+
+    it "passes spaces, quotes and $() through to chpasswd literally" do
+      password = %(alpha beta $(echo pwned) 'q" \\ end)
+      session.change_password("footbot", password)
+
+      inspectable_command = captured_commands.last.sub(/\Aset -o pipefail; /, "")
+                                             .sub(/\|\s*sudo[^|]*chpasswd\s*\z/, "| cat")
+
+      expect(Open3.capture2("bash", "-c", inspectable_command).first.chomp).to eq("footbot:#{password}")
     end
 
     it "updates host.password when changing the ssh user's own password" do

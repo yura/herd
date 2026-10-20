@@ -107,7 +107,6 @@ module Herd
       def expect_file_content_equals(path, required_content)
         if file_exists?(path)
           actual_content = read_file!(path, sudo: true)
-          # "File has been replaced with diff:\n\n#{diff(actual_content, required_content)}"
           return false if actual_content.lines(chomp: true) == required_content.lines(chomp: true)
         end
 

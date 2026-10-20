@@ -41,11 +41,14 @@ module Herd
       run("sudo -p '#{SUDO_PROMPT}' #{command}")
     end
 
+    # Values are shell expressions ("...:$PATH" expands), not literals — shellescape those.
+    # Nests: the outer env is restored after the block.
     def with_env(env)
+      previous = @env
       @env = (@env || {}).merge(env)
       yield
     ensure
-      @env = nil
+      @env = previous
     end
 
     def run(command)
@@ -65,11 +68,13 @@ module Herd
       result.join
     end
 
+    # Nests: the outer directory is restored after the block.
     def within(path)
+      previous = @working_dir
       @working_dir = path
       yield
     ensure
-      @working_dir = nil
+      @working_dir = previous
     end
 
     def respond_to_missing?(cmd)

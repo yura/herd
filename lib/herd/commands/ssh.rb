@@ -36,10 +36,8 @@ module Herd
         run("cat #{key_path}.pub").chomp
       end
 
-      # GitHub binds a deploy key to a single repo, so each repo gets its own key
-      # behind a "github-<name>" alias: clone via git@github-<name>:owner/repo.git.
-      # github.com host keys come from its meta API, so rotations apply on the next run.
-      # Returns the public key.
+      # A deploy key works for one repo only, hence a key per repo behind a "github-<name>"
+      # alias (git@github-<name>:owner/repo.git). Returns the public key.
       def ssh_deploy_key(name, git_host: "github.com", known_hosts: nil,
                          comment: "#{name}@#{host.user}@#{host.host}")
         ssh_config_d_include

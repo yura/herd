@@ -67,8 +67,9 @@ module Herd
       @after_block = block
     end
 
-    def deploy
-      run_deploy(pull: true)
+    # The block runs after the after block, as in check_hooks.
+    def deploy(&after)
+      run_deploy(pull: true, &after)
     end
 
     def check_hooks(dry_run: true, &after)
