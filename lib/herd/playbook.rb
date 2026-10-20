@@ -15,17 +15,26 @@ module Herd
       @stages = []
       instance_exec(&)
 
-      stages    = @stages
+      if @stages.empty?
+        puts(@only ? "playbook: no stage named '#{@only}' — nothing to run" : "playbook: no stages defined — nothing to run")
+        return
+      end
+
       skip_from = from&.to_sym
       excluded  = Array(except).map(&:to_sym)
+      skipping  = !skip_from.nil?
+      runnable  = @stages.reject do |name, *|
+        skipping = false if skipping && name.to_sym == skip_from
+        skipping || excluded.include?(name.to_sym)
+      end
+
+      if runnable.empty?
+        puts "playbook: all stages skipped by --from/--except — nothing to run"
+        return
+      end
 
       @runner.exec do
-        skipping = !skip_from.nil?
-        stages.each do |name, args, kwargs|
-          skipping = false if skipping && name.to_sym == skip_from
-          next if skipping
-          next if excluded.include?(name.to_sym)
-
+        runnable.each do |name, args, kwargs|
           info("▶ #{name}")
           send(name, *args, **kwargs)
         end

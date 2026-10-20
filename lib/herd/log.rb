@@ -47,7 +47,7 @@ module Herd
     def log_command_output(command, output, started_at, caller_method = nil)
       now = Time.now
       log.puts(",")
-      entry = { timestamp: time(now), command: command, output: output, time: now - started_at }
+      entry = { timestamp: time(now), command: command, output: scrub(output), time: now - started_at }
       entry[:caller] = caller_method if caller_method
       log.print(entry.to_json)
       log.flush
@@ -56,7 +56,7 @@ module Herd
     def log_command_error(command, error, started_at, exit_code, caller_method = nil)
       now = Time.now
       log.puts(",")
-      entry = { timestamp: time(now), command: command, error: error, exit_code: exit_code,
+      entry = { timestamp: time(now), command: command, error: scrub(error), exit_code: exit_code,
                 time: now - started_at }
       entry[:caller] = caller_method if caller_method
       log.print(entry.to_json)
@@ -65,6 +65,16 @@ module Herd
 
     def time(timestamp = Time.now)
       timestamp.strftime("%Y-%m-%d %H:%M:%S.%L")
+    end
+
+    private
+
+    # SSH output can arrive truncated mid-character (e.g. exit-status racing the
+    # final data chunk), leaving invalid byte sequences that blow up JSON#generate.
+    def scrub(str)
+      return str unless str.is_a?(String)
+
+      str.scrub
     end
   end
 end

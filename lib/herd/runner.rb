@@ -10,17 +10,33 @@ module Herd
     end
 
     def exec(command = nil, &)
+      if hosts.empty?
+        puts "runner: no hosts to run against — nothing to run"
+        return []
+      end
+
       threads = hosts.map do |host|
         Thread.new { host.exec(command, &) }
       end
 
-      # rescue nil so a failed host doesn't prevent waiting for the rest
       threads.each do |t|
         t.join
       rescue StandardError
         nil
       end
-      threads.map(&:value)
+
+      errors  = []
+      results = threads.map do |t|
+        t.value
+      rescue StandardError => e
+        errors << e
+        nil
+      end
+
+      raise errors.first if errors.one?
+      raise Herd::CommandError, errors.map(&:message).join("; ") if errors.any?
+
+      results
     end
   end
 end

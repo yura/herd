@@ -107,4 +107,22 @@ RSpec.describe Herd::Commands::Apt do
       expect(session.apt_installed?("curl")).to be false
     end
   end
+
+  describe "#apt_version" do
+    let(:check_cmd) { "set -o pipefail; dpkg-query -W -f='${Version}' curl 2>/dev/null || true" }
+
+    before do
+      allow(mock_ssh_channel).to receive(:exec).with(check_cmd).and_yield(mock_ssh_channel, nil)
+    end
+
+    it "returns the installed version string" do
+      allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "7.81.0-1ubuntu1.20")
+      expect(session.apt_version("curl")).to eq("7.81.0-1ubuntu1.20")
+    end
+
+    it "returns nil when the package is not installed" do
+      allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "")
+      expect(session.apt_version("curl")).to be_nil
+    end
+  end
 end

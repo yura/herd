@@ -30,5 +30,14 @@ RSpec.describe Herd::Runner do
         expect(runner.exec { hostname }).to eq(%w[alpha001 alpha002])
       end
     end
+
+    context "when there are no hosts" do
+      let(:hosts) { [] }
+
+      it "prints a message and does not run anything" do
+        expect { expect(runner.exec("hostname")).to eq([]) }
+          .to output(/no hosts to run against — nothing to run/).to_stdout
+      end
+    end
   end
 end

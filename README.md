@@ -54,6 +54,30 @@ host.exec do
 end
 ```
 
+### Running commands
+
+`run(command)` returns output and raises `Herd::CommandError` for a nonzero exit code.
+Use `run_result` when the exit code is part of the expected result:
+
+```ruby
+host.exec do
+  result = run_result("grep 'pattern' /var/log/myapp.log")
+  result.exit_code  # 0: matches, 1: no matches, 2: an error
+
+  command_success?("test -e /etc/hosts") # just the success boolean
+end
+```
+
+`run` takes shell as written; file commands take one literal path; `glob` expands a pattern:
+
+```ruby
+read_file("~/logs/*.log")   # one file, literally named "*.log"
+glob("~/logs/*.log")        # the files that match, as an array
+run("ls ~/logs/*.log")      # a shell command — you write the shell
+```
+
+Details are in [`Herd::Session`](lib/herd/session.rb) and [`Herd::Commands::Files`](lib/herd/commands/files.rb).
+
 ### Multiple hosts in parallel
 
 ```ruby

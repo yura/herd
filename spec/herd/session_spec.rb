@@ -44,13 +44,13 @@ RSpec.describe Herd::Session do
     describe "#authorized_keys" do
       before do
         allow(mock_ssh_channel).to receive(:exec)
-          .with("set -o pipefail; test -e ~/.ssh/authorized_keys && echo yes || echo no")
+          .with("set -o pipefail; test -e \"$HOME\"/.ssh/authorized_keys")
           .and_yield(mock_ssh_channel, nil)
         allow(mock_ssh_channel).to receive(:exec)
-          .with("set -o pipefail; cat ~/.ssh/authorized_keys")
+          .with("set -o pipefail; cat -- \"$HOME\"/.ssh/authorized_keys")
           .and_yield(mock_ssh_channel, nil)
 
-        responses = ["yes", "key1\nkey2\n"]
+        responses = ["", "key1\nkey2\n"]
         allow(mock_ssh_channel).to receive(:on_data) { |&blk| blk.call(nil, responses.shift) } # rubocop:disable RSpec/Yield
       end
 
@@ -63,30 +63,30 @@ RSpec.describe Herd::Session do
       let(:public_key) { "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC" }
 
       before do
-        allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; touch ~/.ssh/authorized_keys")
+        allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; touch -- \"$HOME\"/.ssh/authorized_keys")
                                                  .and_yield(mock_ssh_channel, nil)
-        allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; sudo -p 'HERD_SUDO: ' chmod 600 ~/.ssh/authorized_keys")
+        allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; sudo -p 'HERD_SUDO: ' chmod -- 600 \"$HOME\"/.ssh/authorized_keys")
                                                  .and_yield(mock_ssh_channel, nil)
         allow(mock_ssh_channel).to \
-          receive(:exec).with("set -o pipefail; tee -a ~/.ssh/authorized_keys << \"EOF\"\n#{public_key}\nEOF")
+          receive(:exec).with("set -o pipefail; tee -a -- \"$HOME\"/.ssh/authorized_keys << \"HERD_EOF\"\n#{public_key}\nHERD_EOF")
                         .and_yield(mock_ssh_channel, nil)
       end
 
       it "touches the authorized keys file" do
         session.add_authorized_key(public_key)
 
-        expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; touch ~/.ssh/authorized_keys")
+        expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; touch -- \"$HOME\"/.ssh/authorized_keys")
       end
 
       it "sets strict permissions on authorized keys file" do
         session.add_authorized_key(public_key)
 
-        expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; sudo -p 'HERD_SUDO: ' chmod 600 ~/.ssh/authorized_keys")
+        expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; sudo -p 'HERD_SUDO: ' chmod -- 600 \"$HOME\"/.ssh/authorized_keys")
       end
 
       it "appends the key into authorized keys file" do
         session.add_authorized_key(public_key)
-        command = "set -o pipefail; tee -a ~/.ssh/authorized_keys << \"EOF\"\n#{public_key}\nEOF"
+        command = "set -o pipefail; tee -a -- \"$HOME\"/.ssh/authorized_keys << \"HERD_EOF\"\n#{public_key}\nHERD_EOF"
         expect(mock_ssh_channel).to have_received(:exec).with(command)
       end
     end
