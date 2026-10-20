@@ -94,23 +94,25 @@ module Herd
         file_permissions(path, mode) if mode
       end
 
+      # Returns true if the content was rewritten. Owner/mode changes don't count.
       def file(path, user, group, content: File.read(File.join(FILES, path)), mode: nil)
-        expect_file_content_equals(path, content)
+        changed = expect_file_content_equals(path, content)
 
         file_user_and_group(path, user, group)
         file_permissions(path, mode) if mode
+        changed
       end
 
+      # Returns true if the file was missing or its content differed and got rewritten.
       def expect_file_content_equals(path, required_content)
         if file_exists?(path)
           actual_content = read_file!(path, sudo: true)
-          unless actual_content.lines(chomp: true) == required_content.lines(chomp: true)
-            # "File has been replaced with diff:\n\n#{diff(actual_content, required_content)}"
-            write_to_file!(path, required_content, sudo: true)
-          end
-        else
-          write_to_file!(path, required_content, sudo: true)
+          # "File has been replaced with diff:\n\n#{diff(actual_content, required_content)}"
+          return false if actual_content.lines(chomp: true) == required_content.lines(chomp: true)
         end
+
+        write_to_file!(path, required_content, sudo: true)
+        true
       end
 
       def read_file!(path, sudo: false)

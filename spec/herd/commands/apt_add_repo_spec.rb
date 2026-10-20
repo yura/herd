@@ -68,6 +68,19 @@ RSpec.describe Herd::Commands::Apt do
       end
     end
 
+    context "when checking a key's fingerprint" do
+      it "runs gpg in a throwaway homedir, so a missing ~/.gnupg can't truncate the output" do
+        allow(session).to receive(:file_exists?).with(keyring_path).and_return(true)
+        allow(session).to receive(:run).and_return("fpr:::::::::ABCD:\n")
+
+        session.apt_add_repo(sources_path, sources_line, keyring_path: keyring_path, keyring_url: keyring_url,
+                                                           fingerprint: "ABCD")
+
+        expect(session).to have_received(:run)
+          .with(a_string_including('gpg --homedir "$d"').and(a_string_including('rm -rf "$d"')))
+      end
+    end
+
     context "when a key already exists and matches the fingerprint" do
       let(:fingerprint) { "573BFD6B3D8FBC641079A6ABABF5BD827BD9BF62" }
 

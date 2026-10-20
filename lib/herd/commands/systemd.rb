@@ -31,6 +31,18 @@ module Herd
         sudo "systemctl daemon-reload"
       end
 
+      # Writes /etc/systemd/system/<name>, daemon-reloads only if it changed.
+      # A bare name gets ".service"; pass enable: false for templates ("app@").
+      # Returns true if the unit file changed — callers decide whether to restart.
+      def systemd_unit(name, content, enable: true)
+        unit    = name.include?(".") ? name : "#{name}.service"
+        changed = file("/etc/systemd/system/#{unit}", "root", "root", content: content, mode: 644)
+
+        systemctl_daemon_reload if changed
+        systemctl_enable(unit) if enable
+        changed
+      end
+
       def service_active?(service)
         run("systemctl is-active #{service} || true").strip == "active"
       end

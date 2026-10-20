@@ -78,8 +78,11 @@ module Herd
         raise Herd::CommandError, "apt_add_repo: key at #{keyring_path} does not match expected fingerprint #{fingerprint}"
       end
 
+      # Throwaway homedir: without ~/.gnupg, import-show aborts mid-file and
+      # silently truncates the output on multi-key keyrings.
       def apt_repo_key_fingerprint(keyring_path)
-        run("gpg --dry-run --quiet --no-keyring --import --import-options import-show #{keyring_path} 2>/dev/null || true")
+        gpg = %(gpg --homedir "$d" --dry-run --quiet --no-keyring --import --import-options import-show)
+        run(%(d=$(mktemp -d); #{gpg} #{keyring_path} 2>/dev/null; rm -rf "$d"; true))
       end
     end
   end
