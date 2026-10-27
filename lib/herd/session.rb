@@ -147,11 +147,21 @@ module Herd
       raw_bytes = "".b
       exit_code = nil
       stderr_output = nil
+      # sudo with pwfeedback echoes "*" per typed char; drop that line, up to sudo's newline.
+      skip_feedback = false
       channel.exec("set -o pipefail; #{command}") do |c, _|
         c.on_data do |_, data|
+          if skip_feedback
+            newline = data.index("\n") or next
+            skip_feedback = false
+            data = data[(newline + 1)..]
+            next if data.empty?
+          end
+
           data_utf8 = data.dup.force_encoding("UTF-8")
           if data_utf8.include?(SUDO_PROMPT) || data_utf8.include?("[sudo] password for")
             c.send_data "#{password}\n"
+            skip_feedback = true
           else
             # strip ANSI escape codes produced by PTY before printing
             print data.gsub(/\e\[[0-9;]*[A-Za-z]|\e./, "") if ENV["HERD_STREAM"]

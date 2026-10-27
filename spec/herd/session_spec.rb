@@ -36,6 +36,25 @@ RSpec.describe Herd::Session do
     end
   end
 
+  describe "#sudo" do
+    before do
+      allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; sudo -p 'HERD_SUDO: ' whoami")
+                                               .and_yield(mock_ssh_channel, nil)
+      allow(mock_ssh_channel).to receive(:send_data)
+      allow(mock_ssh_channel).to receive(:on_data)
+        .and_yield(nil, "HERD_SUDO: ").and_yield(nil, "*****").and_yield(nil, "****\r\nroot\r\n")
+    end
+
+    it "answers the password prompt" do
+      session.sudo("whoami")
+      expect(mock_ssh_channel).to have_received(:send_data).with("T0pS3kr3t\n")
+    end
+
+    it "drops the pwfeedback asterisks from the output" do
+      expect(session.sudo("whoami")).to eq("root\r\n")
+    end
+  end
+
   context "with AuthorizedKeys commands" do
     it "preprends authorized keys helpers" do
       expect(described_class.ancestors).to include(Herd::Commands::AuthorizedKeys)
