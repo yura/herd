@@ -16,7 +16,10 @@ if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
 fi
 
 image=herd-system-spec
-docker build -q -t "$image" spec/system >/dev/null
+# CI builds the image beforehand with a layer cache and sets HERD_SYSTEM_SKIP_BUILD=1.
+if [ -z "${HERD_SYSTEM_SKIP_BUILD:-}" ]; then
+  docker build -q -t "$image" spec/system >/dev/null
+fi
 
 container=$(docker run -d --rm -p 127.0.0.1::22 "$image")
 trap 'docker stop "$container" >/dev/null 2>&1 || true' EXIT
