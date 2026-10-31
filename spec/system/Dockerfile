@@ -24,6 +24,12 @@ RUN useradd -m -s /bin/bash herd \
 
 RUN sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
 
+# keyonly: has a password, but sshd lets it in by key only, as on a hardened server.
+RUN useradd -m -s /bin/bash keyonly \
+ && echo 'keyonly:keyonly-password' | chpasswd -c SHA512 \
+ && install -d -m 700 -o keyonly -g keyonly /home/keyonly/.ssh \
+ && printf 'Match User keyonly\n  PasswordAuthentication no\n' > /etc/ssh/sshd_config.d/10-keyonly.conf
+
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod 755 /usr/local/bin/entrypoint.sh
 

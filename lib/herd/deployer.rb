@@ -181,8 +181,7 @@ module Herd
         return dry_run_result(session, app, tracking) if dry_run
 
         state.phase = :lock
-        prepare_tracking(session, app, tracking)
-        acquire_lock(session, tracking, token)
+        claim_tracking(session, app, tracking, token)
         state.lock_acquired = true
 
         state.phase = :sync
@@ -312,18 +311,35 @@ module Herd
     # Hooks not applied yet whose commit is in the history of HEAD, parents first;
     # hooks of one commit in file name order.
     def pending_hooks(session, app, tracking, markers: true)
-      applied = markers ? applied_hooks(session, tracking) : []
-      return [] if (@hooks.keys - applied).empty?
+      return [] if @hooks.empty?
 
-      position = session.git_history(app).each_with_index.to_h
+      applied, history = hook_markers_and_history(session, app, tracking, markers: markers)
+      position = history.each_with_index.to_h
       @hooks.values
             .reject { |hook| applied.include?(hook.name) }
             .select { |hook| position.key?(hook.sha) }
             .sort_by { |hook| [position.fetch(hook.sha), hook.name] }
     end
 
-    def applied_hooks(session, tracking)
-      session.run("ls -1A -- #{session.shell_path(tracking)}", pty: false).split("\n").map(&:strip)
+    # [applied hook names, history of HEAD] in one round trip. The history (every commit,
+    # parents first) is only listed when some hook has no marker yet.
+    def hook_markers_and_history(session, app, tracking, markers:)
+      script = <<~SH
+        set -eu
+        dir=$1 app=$2 read_markers=$3
+        shift 3
+        pending=
+        for name in "$@"; do
+          if [ "$read_markers" != 1 ] || [ ! -e "$dir/$name" ]; then pending=1; break; fi
+        done
+        if [ "$read_markers" = 1 ] && [ -d "$dir" ]; then ls -1A -- "$dir"; fi
+        printf '\\0'
+        if [ -n "$pending" ]; then git -C "$app" rev-list --topo-order --reverse HEAD; fi
+      SH
+      args = [session.shell_path(tracking), session.shell_path(app), session.shell_args(markers ? 1 : 0, *@hooks.keys)]
+      output = session.run("bash -c #{script.shellescape} _ #{args.join(" ")}", pty: false)
+      marker_list, history = output.split("\0", 2)
+      [marker_list.split("\n").map(&:strip), session.git_lines(history.to_s)]
     end
 
     def hook_applies?(session, hook)
@@ -342,44 +358,67 @@ module Herd
       "#{TRACKING_DIR}/#{@app_id || "#{File.basename(app)}-#{Digest::SHA256.hexdigest(app)[0, 12]}"}"
     end
 
-    # Creates the tracking dir and records the app's path in it.
-    def prepare_tracking(session, app, tracking)
-      adopt_legacy_tracking(session, app, tracking) unless @app_id
-      session.run("mkdir -p -- #{session.shell_path(tracking)}", pty: false)
-      return if tracking_owner(session, app, tracking)
+    # Exit codes of the claim_tracking script for its refusals.
+    CLAIM_TAKEN  = 20
+    CLAIM_LOCKED = 21
 
-      session.run("printf '%s\\n' #{session.shell_args(app)} > #{session.shell_path("#{tracking}/.app_path")}",
-                  pty: false)
-    end
-
-    # Compatibility with Herd before 2026-10, whose tracking dir was named after the app
-    # directory only (~/.herd_deploy/<name>/). Remove once those deploys have moved.
+    # Creates the tracking dir, records the app's path in it and takes the lock, in one
+    # round trip and in this order:
     #
-    # The old dir doesn't say which app it was for, so the first app deployed with this name
-    # takes it over: it is renamed to this app's tracking dir, markers and all. mv -T is
-    # atomic, so of two deploys running at once only one gets it. A dir that already records
-    # another app's path is left alone.
-    def adopt_legacy_tracking(session, app, tracking)
-      legacy = legacy_tracking(session, app, tracking) or return
-      result = session.run_result("mv -T -- #{session.shell_path(legacy)} #{session.shell_path(tracking)}", pty: false)
-      if result.success?
-        session.info("hook markers moved from #{legacy} to #{tracking}")
-      elsif !session.command_success?("test -d #{session.shell_path(tracking)}", pty: false)
-        raise Herd::CommandError, "could not move #{legacy} to #{tracking}: #{result.stderr.strip}"
+    # 1. Compatibility with Herd before 2026-10, whose tracking dir was named after the app
+    #    directory only (~/.herd_deploy/<name>/); remove once those deploys have moved. The old
+    #    dir doesn't say which app it was for, so the first app deployed with this name takes it
+    #    over: it is renamed to this app's tracking dir, markers and all. mv -T is atomic, so of
+    #    two deploys running at once only one gets it. A dir recording another app is left alone.
+    # 2. The dir records the app's path; one recording another app is refused (TrackingDirTaken).
+    # 3. mkdir is atomic: only one deploy creates .lock. The owner file carries this run's
+    #    token; only the run holding it removes the lock.
+    def claim_tracking(session, app, tracking, token)
+      script = <<~SH
+        set -eu
+        dir=$1 legacy=$2 app=$3 owner=$4
+        if [ -n "$legacy" ] && [ ! -d "$dir" ] && [ -d "$legacy" ]; then
+          recorded=
+          if [ -e "$legacy/.app_path" ]; then recorded=$(cat -- "$legacy/.app_path"); fi
+          if [ -z "$recorded" ] || [ "$recorded" = "$app" ]; then
+            if mv -T -- "$legacy" "$dir" 2>/dev/null; then
+              echo "hook markers moved from $legacy to $dir" >&2
+            elif [ ! -d "$dir" ]; then
+              echo "could not move $legacy to $dir" >&2
+              exit 1
+            fi
+          fi
+        fi
+        mkdir -p -- "$dir"
+        if [ -e "$dir/.app_path" ]; then
+          recorded=$(cat -- "$dir/.app_path")
+          if [ "$recorded" != "$app" ]; then printf '%s\\n' "$recorded"; exit #{CLAIM_TAKEN}; fi
+        else
+          printf '%s\\n' "$app" > "$dir/.app_path"
+        fi
+        if ! mkdir -- "$dir/.lock" 2>/dev/null; then
+          [ -d "$dir/.lock" ] || { echo "could not create $dir/.lock" >&2; exit 1; }
+          if [ -e "$dir/.lock/owner" ]; then tail -n +2 -- "$dir/.lock/owner"; fi
+          exit #{CLAIM_LOCKED}
+        fi
+        printf '%s' "$owner" > "$dir/.lock/owner"
+      SH
+      legacy = @app_id ? "" : "#{TRACKING_DIR}/#{File.basename(app)}"
+      owner  = "#{token}\n#{Socket.gethostname} pid #{Process.pid} at #{Time.now.utc}\n"
+      args   = [session.shell_path(tracking), legacy.empty? ? "''" : session.shell_path(legacy),
+                session.shell_args(app, owner)]
+      result = session.run_result("bash -c #{script.shellescape} _ #{args.join(" ")}", pty: false)
+      session.info(result.stderr.strip) if result.success? && !result.stderr.strip.empty?
+      return if result.success?
+
+      case result.exit_code
+      when CLAIM_TAKEN then raise TrackingDirTaken, tracking_taken_message(app, tracking, result.stdout.strip)
+      when CLAIM_LOCKED
+        owner = result.stdout.strip
+        raise DeployLocked, "#{tracking} is locked by another deploy (#{owner.empty? ? "owner unknown" : owner}). " \
+                            "If it is no longer running: rm -rf -- #{tracking}/.lock"
+      else raise Herd::CommandError, "could not prepare #{tracking}: #{result.stderr.strip} (exit #{result.exit_code})"
       end
-    end
-
-    # The pre-2026-10 tracking dir this app may take over, or nil: there is none, this app
-    # already has its own, or it records another app.
-    def legacy_tracking(session, app, tracking)
-      legacy = "#{TRACKING_DIR}/#{File.basename(app)}"
-      return if session.command_success?("test -d #{session.shell_path(tracking)}", pty: false)
-      return unless session.command_success?("test -d #{session.shell_path(legacy)}", pty: false)
-
-      recorded = session.run_result("cat -- #{session.shell_path("#{legacy}/.app_path")}", pty: false)
-      return legacy unless recorded.success?
-
-      recorded.stdout.chomp == app ? legacy : nil
     end
 
     # The app path recorded in the tracking dir, or nil if there is none yet. Raises
@@ -391,24 +430,26 @@ module Herd
       owner = recorded.stdout.chomp
       return owner if owner == app
 
-      raise TrackingDirTaken, "#{tracking} holds the hook markers of #{owner}, not #{app}: both apps are named " \
-                              "#{File.basename(app).inspect}. Pass this one its own app_id:, e.g. " \
-                              "app_id: #{"#{File.basename(File.dirname(app))}-#{File.basename(app)}".inspect}"
+      raise TrackingDirTaken, tracking_taken_message(app, tracking, owner)
     end
 
-    # mkdir is atomic: only one deploy creates .lock. The owner file carries this run's
-    # token; only the run holding it removes the lock.
-    def acquire_lock(session, tracking, token)
-      lock = session.shell_path("#{tracking}/.lock")
-      if session.command_success?("mkdir -- #{lock}", pty: false)
-        owner = "#{token}\n#{Socket.gethostname} pid #{Process.pid} at #{Time.now.utc}\n"
-        session.run("cat > #{lock}/owner", pty: false, stdin: owner)
-        return
-      end
+    def tracking_taken_message(app, tracking, owner)
+      "#{tracking} holds the hook markers of #{owner}, not #{app}: both apps are named " \
+        "#{File.basename(app).inspect}. Pass this one its own app_id:, e.g. " \
+        "app_id: #{"#{File.basename(File.dirname(app))}-#{File.basename(app)}".inspect}"
+    end
 
-      owner = session.run_result("cat -- #{lock}/owner", pty: false).stdout.lines.drop(1).join.strip
-      raise DeployLocked, "#{tracking} is locked by another deploy (#{owner.empty? ? "owner unknown" : owner}). " \
-                          "If it is no longer running: rm -rf -- #{tracking}/.lock"
+    # The pre-2026-10 tracking dir a dry run reads markers from (claim_tracking moves it on a
+    # real deploy), or nil: there is none, this app already has its own, or it records another app.
+    def legacy_tracking(session, app, tracking)
+      legacy = "#{TRACKING_DIR}/#{File.basename(app)}"
+      return if session.command_success?("test -d #{session.shell_path(tracking)}", pty: false)
+      return unless session.command_success?("test -d #{session.shell_path(legacy)}", pty: false)
+
+      recorded = session.run_result("cat -- #{session.shell_path("#{legacy}/.app_path")}", pty: false)
+      return legacy unless recorded.success?
+
+      recorded.stdout.chomp == app ? legacy : nil
     end
 
     def release_lock(session, tracking, token)

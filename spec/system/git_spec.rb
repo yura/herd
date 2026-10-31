@@ -101,5 +101,44 @@ RSpec.describe Herd::Commands::Git, :system do
         expect(yielded).to be(false)
       end
     end
+
+    it "refuses before yielding when the branch is missing on the remote" do
+      with_system_session do |s, dir|
+        origin = make_origin(s, dir)
+        s.git_repo("#{dir}/app", origin, ref: "main")
+        git(s, "-C #{s.shell_path("#{dir}/app")} checkout --quiet -b nope") # local only, not on origin
+        yielded = false
+
+        expect { s.git_sync!("#{dir}/app", "nope") { yielded = true } }
+          .to raise_error(Herd::CommandError, /couldn't find remote ref/)
+        expect(yielded).to be(false)
+      end
+    end
+
+    it "refuses before yielding when the branch to switch to has local commits" do
+      with_system_session do |s, dir|
+        origin = make_origin(s, dir)
+        git(s, "-C #{s.shell_path("#{dir}/dev")} checkout --quiet -b release")
+        commit(s, dir, "on release")
+        s.git_repo("#{dir}/app", origin, ref: "release")
+        commit_script = 'echo x >> "$1/README" && git -C "$1" commit --quiet -am local && git -C "$1" checkout --quiet main'
+        git_script(s, commit_script, "#{dir}/app")
+        yielded = false
+
+        expect { s.git_sync!("#{dir}/app", "release", switch_branch: true) { yielded = true } }
+          .to raise_error(Herd::CommandError, /local release has commits/)
+        expect(yielded).to be(false)
+      end
+    end
+
+    it "returns changed paths as they are, spaces and all, with git's own output kept out" do
+      with_system_session do |s, dir|
+        origin = make_origin(s, dir)
+        s.git_repo("#{dir}/app", origin, ref: "main")
+        commit(s, dir, "spaced", file: "my file.txt")
+
+        expect(s.git_sync!("#{dir}/app", "main")).to eq(["my file.txt"])
+      end
+    end
   end
 end

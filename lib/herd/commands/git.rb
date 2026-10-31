@@ -37,60 +37,25 @@ module Herd
       def git_sync!(path, ref, remote: "origin", ignore_untracked: false, strict_branch: true, switch_branch: false)
         git_branch!(ref)
         raise ArgumentError, "git: invalid remote name #{remote.inspect}" unless remote.match?(REMOTE)
-        if git_dirty?(path, ignore_untracked: ignore_untracked)
-          raise Herd::CommandError, "git_sync!: #{path} has uncommitted changes, refusing to sync"
-        end
 
-        current = git_current_branch(path)
-        ref     = git_sync_ref(path, ref, strict_branch: strict_branch) unless switch_branch
+        # Three round trips: inspect, fetch and check, apply. Everything that can refuse
+        # happens in the first two, before the block (which may stop services).
+        current, dirty = git_inspect(path, ignore_untracked: ignore_untracked)
+        raise Herd::CommandError, "git_sync!: #{path} has uncommitted changes, refusing to sync" if dirty
 
-        git_fetch(path, ref, remote: remote)
-        unless command_success?("#{git(path)} rev-parse --verify --quiet #{shell_args("#{git_remote_ref(remote, ref)}^{commit}")}",
-                                pty: false)
-          raise Herd::CommandError, "git_sync!: #{git_remote_ref(remote, ref)} is missing after fetch, refusing to sync"
-        end
-
+        ref    = git_follow_ref(path, ref, current, strict_branch: strict_branch) unless switch_branch
         switch = switch_branch && current != ref
-        if switch
-          # After checkout, merge --ff-only would accept a local ref that is ahead of remote/ref.
-          git_refuse_local_commits!(path, ref, remote: remote)
-        else
-          # `pull --ff-only` misses this: a checkout merely ahead of the remote
-          # still fast-forwards, so committed hand edits would ship silently.
-          ahead = git_ahead_count(path, ref, remote: remote)
-          if ahead.positive?
-            raise Herd::CommandError,
-                  "git_sync!: #{path} has #{ahead} local commit(s) not on #{remote}/#{ref}, refusing to sync"
-          end
-        end
+        git_fetch_and_check(path, ref, remote: remote, switch: switch)
 
         yield if block_given?
 
-        before = git_head_sha(path)
-        git_checkout(path, ref, remote: remote) if switch
-        run("#{git(path)} merge --ff-only #{shell_args(git_remote_ref(remote, ref))}")
-        after = git_head_sha(path)
-
-        before == after ? [] : git_changed_files(path, before, after)
+        git_apply(path, ref, remote: remote, switch: switch)
       end
 
       # The branch git_sync! actually syncs. strict_branch: false follows whatever
       # branch the host is on.
       def git_sync_ref(path, ref, strict_branch: true)
-        branch = git_current_branch(path)
-        return ref if branch == ref
-
-        # Detached HEAD names no branch for the lax mode to follow — fatal either way.
-        if branch == "HEAD"
-          raise Herd::CommandError, "git_sync!: #{path} is in detached HEAD, expected '#{ref}', refusing to sync"
-        end
-
-        if strict_branch
-          raise Herd::CommandError, "git_sync!: #{path} is on '#{branch}', expected '#{ref}', refusing to sync"
-        end
-
-        info("warning: #{path} is on '#{branch}', not '#{ref}' — syncing '#{branch}'")
-        branch
+        git_follow_ref(path, ref, git_current_branch(path), strict_branch: strict_branch)
       end
 
       def git_current_branch(path)
@@ -155,6 +120,111 @@ module Herd
 
       def git(path) = "git -C #{shell_path(path)}"
 
+      # Exit codes of the git_sync! scripts for refusals; anything else is git's own failure.
+      SYNC_REF_MISSING  = 10
+      SYNC_LOCAL_AHEAD  = 11
+
+      # [current branch ("HEAD" when detached), dirty?] in one round trip.
+      def git_inspect(path, ignore_untracked:)
+        script = <<~SH
+          set -eu
+          git -C "$1" rev-parse --abbrev-ref HEAD
+          status=$(git -C "$1" status --porcelain ${2:+"$2"})
+          if [ -n "$status" ]; then echo dirty; else echo clean; fi
+        SH
+        flags = ignore_untracked ? "--untracked-files=no" : ""
+        branch, state = run("bash -c #{script.shellescape} _ #{shell_path(path)} #{shell_args(flags)}", pty: false)
+                        .split("\n").map(&:strip)
+        [branch, state == "dirty"]
+      end
+
+      # The rule of git_sync_ref, given the current branch.
+      def git_follow_ref(path, ref, branch, strict_branch:)
+        return ref if branch == ref
+
+        # Detached HEAD names no branch for the lax mode to follow — fatal either way.
+        if branch == "HEAD"
+          raise Herd::CommandError, "git_sync!: #{path} is in detached HEAD, expected '#{ref}', refusing to sync"
+        end
+        if strict_branch
+          raise Herd::CommandError,
+                "git_sync!: #{path} is on '#{branch}', expected '#{ref}', refusing to sync"
+        end
+
+        info("warning: #{path} is on '#{branch}', not '#{ref}' — syncing '#{branch}'")
+        branch
+      end
+
+      # Fetches ref into its remote-tracking ref and runs every check that must pass before
+      # the working tree changes, in one round trip. Refusals exit with their own codes.
+      def git_fetch_and_check(path, ref, remote:, switch:)
+        script = <<~SH
+          set -eu
+          remote_ref="refs/remotes/$2/$3"
+          git -C "$1" fetch --quiet "$2" "+refs/heads/$3:$remote_ref"
+          git -C "$1" rev-parse --verify --quiet "$remote_ref^{commit}" >/dev/null || exit #{SYNC_REF_MISSING}
+          if [ "$4" = switch ]; then
+            # After checkout, merge --ff-only would accept a local ref that is ahead of remote/ref.
+            git -C "$1" show-ref --verify --quiet "refs/heads/$3" || exit 0
+            status=0
+            git -C "$1" merge-base --is-ancestor "refs/heads/$3" "$remote_ref" || status=$?
+            [ "$status" -ne 1 ] || exit #{SYNC_LOCAL_AHEAD}
+            exit "$status"
+          fi
+          # pull --ff-only misses this: a checkout merely ahead of the remote still
+          # fast-forwards, so committed hand edits would ship silently.
+          ahead=$(git -C "$1" rev-list --count "$remote_ref..HEAD")
+          [ "$ahead" -eq 0 ] || { echo "$ahead"; exit #{SYNC_LOCAL_AHEAD}; }
+        SH
+        result = run_result("bash -c #{script.shellescape} _ #{shell_path(path)} #{shell_args(remote, ref, switch ? "switch" : "stay")}",
+                            pty: false)
+        return if result.success?
+
+        case result.exit_code
+        when SYNC_REF_MISSING
+          raise Herd::CommandError, "git_sync!: #{git_remote_ref(remote, ref)} is missing after fetch, refusing to sync"
+        when SYNC_LOCAL_AHEAD
+          if switch
+            raise Herd::CommandError,
+                  "git_sync!: #{path}: local #{ref} has commits not on #{git_remote_ref(remote,
+                                                                                        ref)}, refusing to sync"
+          end
+
+          raise Herd::CommandError,
+                "git_sync!: #{path} has #{result.stdout.strip} local commit(s) not on #{remote}/#{ref}, refusing to sync"
+        else
+          raise Herd::CommandError, "git_sync!: #{result.stderr.strip} (exit #{result.exit_code})"
+        end
+      end
+
+      # Checks out ref when switching, fast-forwards to the remote ref and returns the files
+      # changed between the HEAD before and after. git's own messages go to stderr, so stdout
+      # carries only the result: two SHAs, then NUL-separated paths.
+      def git_apply(path, ref, remote:, switch:)
+        script = <<~SH
+          set -eu
+          remote_ref="refs/remotes/$2/$3"
+          before=$(git -C "$1" rev-parse HEAD)
+          if [ "$4" = switch ]; then
+            if git -C "$1" show-ref --verify --quiet "refs/heads/$3"; then
+              git -C "$1" checkout --quiet "$3" -- >&2
+            else
+              # --no-track: tracking needs the remote's fetch config to cover the branch, which a
+              # single-branch clone's doesn't; Herd compares against the full remote ref anyway.
+              git -C "$1" checkout --quiet --no-track -b "$3" "$remote_ref" >&2
+            fi
+          fi
+          git -C "$1" merge --ff-only "$remote_ref" >&2
+          after=$(git -C "$1" rev-parse HEAD)
+          printf '%s\\n%s\\n' "$before" "$after"
+          [ "$before" = "$after" ] || git -C "$1" diff --name-only -z "$before" "$after"
+        SH
+        output = run("bash -c #{script.shellescape} _ #{shell_path(path)} #{shell_args(remote, ref, switch ? "switch" : "stay")}",
+                     pty: false)
+        before, after, files = output.split("\n", 3)
+        before == after ? [] : files.to_s.split("\0")
+      end
+
       # Full ref names only: a short "origin/main" depends on what refs and config the clone has.
       def git_remote_ref(remote, ref) = "refs/remotes/#{remote}/#{ref}"
 
@@ -163,33 +233,6 @@ module Herd
 
         raise ArgumentError,
               "git: #{ref.inspect} is not a branch name (tags and SHAs aren't supported)"
-      end
-
-      # Raises if the local branch exists and has commits that aren't on remote/branch.
-      def git_refuse_local_commits!(path, branch, remote:)
-        return unless command_success?("#{git(path)} show-ref --verify --quiet #{shell_args("refs/heads/#{branch}")}",
-                                       pty: false)
-
-        base   = git_remote_ref(remote, branch)
-        result = run_result("#{git(path)} merge-base --is-ancestor #{shell_args("refs/heads/#{branch}", base)}",
-                            pty: false)
-        return if result.success?
-        raise Herd::CommandError, "git: merge-base failed: #{result.stderr.strip}" unless result.exit_code == 1
-
-        raise Herd::CommandError, "git_sync!: #{path}: local #{branch} has commits not on #{base}, refusing to sync"
-      end
-
-      def git_checkout(path, ref, remote:)
-        local = command_success?("#{git(path)} show-ref --verify --quiet #{shell_args("refs/heads/#{ref}")}",
-                                 pty: false)
-        if local
-          run("#{git(path)} checkout --quiet #{shell_args(ref)} --")
-        else
-          # --no-track: tracking needs the remote's fetch config to cover the branch, which a
-          # single-branch clone's doesn't; Herd compares against the full remote ref anyway.
-          run("#{git(path)} checkout --quiet --no-track -b #{shell_args(ref)} #{shell_args(git_remote_ref(remote,
-                                                                                                          ref))}")
-        end
       end
     end
   end

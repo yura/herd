@@ -287,7 +287,8 @@ Channel handling (sudo prompt, stderr, exit status, stdin, timeout) is checked a
 net-ssh `Channel` over a scripted socket (`Net::SSH::Test`); commands are checked with stubs.
 `bundle exec rspec` skips `spec/system` and says so.
 
-Everything that needs a real shell — quoting, files, `within`, env, exit codes, users — is in
+Everything that needs a real shell — quoting, files, `within`, env, exit codes, users, login by
+key and a server that refuses passwords — is in
 `spec/system` and runs only inside the container built from `spec/system/Dockerfile`:
 
 - the image contains only the files of `spec/system` (`COPY`); nothing from your machine is mounted;
@@ -298,9 +299,6 @@ Everything that needs a real shell — quoting, files, `within`, env, exit codes
 `spec/system/isolation_spec.rb` checks that boundary: a command run as root in the container can't
 change a file created outside it. Without Docker, `bin/system-spec` stops with an error; it never falls
 back to your local shell. CI runs both suites.
-
-`spec/integration` runs against a real server of yours and needs a `.env` with its credentials:
-`bundle exec rspec spec/integration`.
 
 To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
 

@@ -36,14 +36,18 @@ RSpec.describe Herd::Deployer, :system do
 
   # Origin with main and a side branch, an app clone, and hooks: "a" on main, "late" on a
   # later commit dated before "a", "side" on a branch that's not merged into main.
+  # Two round trips (make_origin and one script): the repositories are scaffolding here,
+  # not what's under test.
   def setup_app(s, dir)
-    origin = make_origin(s, dir)
-    a      = commit(s, dir, "a", date: 2_000_000_000)
-    late   = commit(s, dir, "late", date: 1_000_000_000)
-    git(s, "-C #{s.shell_path("#{dir}/dev")} checkout --quiet -b side")
-    side = commit(s, dir, "side")
-    git(s, "-C #{s.shell_path("#{dir}/dev")} checkout --quiet main")
-    git(s, "clone --quiet -- #{s.shell_path(origin)} #{s.shell_path("#{dir}/app")}")
+    make_origin(s, dir)
+    a, late, side = git_script(s, <<~SH, dir).split
+      commit_in "$1" a file 2000000000
+      commit_in "$1" late file 1000000000
+      git -C "$1/dev" checkout --quiet -b side
+      commit_in "$1" side file
+      git -C "$1/dev" checkout --quiet main
+      git clone --quiet -- "$1/origin.git" "$1/app"
+    SH
     hook(a, "a", dir)
     hook(late, "late", dir)
     hook(side, "side", dir)
