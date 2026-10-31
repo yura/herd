@@ -18,7 +18,6 @@ gem "erb"
 gem "json"
 gem "logger"
 gem "net-ssh", "~> 7.3"
-gem "rsync"
 
 group :development, :test do
   gem "dotenv"

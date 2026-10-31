@@ -7,13 +7,26 @@ module Herd
   module Commands
     # PostgreSQL administration as the postgres superuser, via psql over peer auth.
     module Postgres
+      PSQL_VARIABLE = /\A[a-z_][a-z0-9_]*\z/
       ROLE_ATTRIBUTE = /\A(NO)?(SUPERUSER|CREATEDB|CREATEROLE|INHERIT|LOGIN|REPLICATION|BYPASSRLS)\z/
 
-      # Returns the trimmed output (tuples only, "|"-separated). vars become psql
+      # Returns the trimmed output (tuples only, "|"-separated, rows joined with "\n"). vars become psql
       # variables: write :'name' for a literal, :"name" for an identifier, and psql quotes them.
-      def psql(sql, db: nil, vars: {})
+      #
+      # The SQL and the variables reach psql in an uploaded file (psql -f -), never on the
+      # command line or in a heredoc. sensitive: true keeps the statement and its output out
+      # of the log — use it when vars carry a password.
+      def psql(sql, db: nil, vars: {}, sensitive: false)
+        script = psql_script(sql, vars)
         # From /: postgres can't enter a 750 home and psql would warn into the output.
-        within("/") { sudo("-u postgres #{psql_command(sql, db: db, vars: vars)}") }.strip
+        output = within("/") do
+          with_upload(script, sensitive: sensitive) do |file|
+            sudo("-u postgres #{psql_command(db)} < #{file.shell_path}", sensitive: sensitive)
+          end
+        end
+        # Rows end in "\r\r\n" by the time they arrive: sudo's own PTY (use_pty) and the
+        # session's each turn "\n" into "\r\n".
+        output.gsub(/\r+\n/, "\n").strip
       end
 
       # Rows as hashes keyed by column name, built by Postgres itself via json_agg.
@@ -45,13 +58,19 @@ module Herd
 
         sql = %(#{created ? "CREATE" : "ALTER"} ROLE :"name")
         sql += " WITH #{options.join(" ")}" if options.any?
-        psql(sql, vars: { name: name, password: password }.compact)
+        secret(password) if password
+        psql(sql, vars: { name: name, password: password }.compact, sensitive: !password.nil?)
         created
       end
 
       # :missing, :offline or :online, from pg_lsclusters (postgresql-common).
       def pg_cluster_status(version, cluster = "main")
-        clusters = JSON.parse(run("pg_lsclusters -js 2>/dev/null || echo '[]'"))
+        result = run_result("pg_lsclusters -js", pty: false)
+        # 127: postgresql-common isn't installed, so there is no cluster at all.
+        return :missing if result.exit_code == 127
+        raise Herd::CommandError, "pg_lsclusters: #{result.stderr.strip}" unless result.success?
+
+        clusters = JSON.parse(result.stdout)
         found    = clusters.find { |c| c["version"].to_s == version.to_s && c["cluster"] == cluster }
         return :missing unless found
 
@@ -59,7 +78,7 @@ module Herd
       end
 
       def pg_ready?
-        run("pg_isready -q && echo yes || echo no").strip == "yes"
+        command_success?("pg_isready -q")
       end
 
       def pg_wait_ready(timeout: 30)
@@ -73,14 +92,37 @@ module Herd
 
       private
 
-      # SQL goes through a quoted heredoc, so the shell never touches it;
-      # only the -v values need shell escaping.
-      def psql_command(sql, db:, vars:)
+      def psql_command(db)
         flags = ["-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1"]
         flags.push("-d", db.to_s) if db
-        vars.each { |key, value| flags.push("-v", "#{key}=#{value}") }
+        "psql #{shell_args(flags)} -f -"
+      end
 
-        "psql #{flags.shelljoin} <<'HERD_SQL'\n#{sql}\nHERD_SQL"
+      # \set lines for vars, then the SQL. Names are lower case so they can't hit psql's own
+      # variables (ON_ERROR_STOP, AUTOCOMMIT, ...). In a quoted \set argument psql reads
+      # \\ \n \r \t as escapes and '' as a quote, so backslashes are doubled first, then
+      # real line breaks and tabs are written as escapes: each \set stays one line.
+      def psql_script(sql, vars)
+        lines = vars.map do |name, value|
+          name = name.to_s
+          unless name.match?(PSQL_VARIABLE)
+            raise ArgumentError,
+                  "psql: variable name #{name.inspect} must match [a-z_][a-z0-9_]*"
+          end
+
+          "\\set #{name} '#{psql_quote(value.to_s, name)}'"
+        end
+        "#{(lines + [sql]).join("\n")}\n"
+      end
+
+      def psql_quote(value, name)
+        unless value.dup.force_encoding(Encoding::UTF_8).valid_encoding?
+          raise ArgumentError, "psql: #{name} is not valid UTF-8"
+        end
+        raise ArgumentError, "psql: #{name} contains NUL, which PostgreSQL text can't hold" if value.include?("\0")
+
+        # Blocks, not replacement strings: gsub reads backslashes in a replacement string.
+        value.gsub("\\") { "\\\\" }.gsub("\n") { "\\n" }.gsub("\r") { "\\r" }.gsub("\t") { "\\t" }.gsub("'") { "''" }
       end
 
       def pg_role_attribute(attribute)

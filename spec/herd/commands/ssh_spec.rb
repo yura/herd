@@ -1,10 +1,9 @@
 # frozen_string_literal: true
 
 RSpec.describe Herd::Commands::Ssh do
-  let(:session) { Herd::Session.new(host, mock_ssh_session, "secret", mock_log) }
+  # Fresh users, real sshd -t/-T and the AcceptEnv rollback are in spec/system/ssh_spec.rb.
+  let(:session) { Herd::Session.new(host, nil, "secret", StringIO.new) }
   let(:host) { Herd::Host.new("10.0.0.1", user: "deploy") }
-  let(:mock_ssh_session) { instance_double(Net::SSH::Connection::Session) }
-  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil, flush: nil) }
   let(:github_keys) { ["ssh-ed25519 AAAAgh", "ssh-rsa AAAArsa"] }
 
   after { described_class.instance_variable_set(:@github_ssh_keys, nil) }
@@ -27,50 +26,22 @@ RSpec.describe Herd::Commands::Ssh do
     end
   end
 
-  describe "#sshd_disable_accept_env" do
-    let(:tmp) { "/tmp/tmp.abc" }
-
-    before do
-      allow(session).to receive_messages(mktemp: tmp, command_success?: true)
-      allow(session).to receive(:run).and_return("")
-      allow(session).to receive(:sudo)
-      allow(session).to receive(:systemctl_reload)
-    end
-
-    it "edits a copy, validates it, installs it, then reloads sshd" do
-      expect(session.sshd_disable_accept_env).to be(true)
-
-      expect(session).to have_received(:run).with("sed 's/^AcceptEnv/#AcceptEnv/' /etc/ssh/sshd_config > #{tmp}").ordered
-      expect(session).to have_received(:sudo).with("sshd -t -f #{tmp}").ordered
-      expect(session).to have_received(:sudo).with("install -m 644 -o root -g root -- #{tmp} /etc/ssh/sshd_config").ordered
-      expect(session).to have_received(:systemctl_reload).with("ssh").ordered
-      expect(session).to have_received(:run).with("rm -f -- #{tmp}")
-    end
-
-    it "leaves sshd alone when AcceptEnv is already off" do
-      allow(session).to receive(:command_success?).and_return(false)
-
-      expect(session.sshd_disable_accept_env).to be(false)
-      expect(session).not_to have_received(:sudo)
-    end
-
-    it "keeps the original and skips the reload when sshd -t rejects the copy" do
-      allow(session).to receive(:sudo).with("sshd -t -f #{tmp}").and_raise(Herd::CommandError, "bad config")
-
-      expect { session.sshd_disable_accept_env }.to raise_error(Herd::CommandError, /bad config/)
-      expect(session).not_to have_received(:sudo).with(/install/)
-      expect(session).not_to have_received(:systemctl_reload)
-      expect(session).to have_received(:run).with("rm -f -- #{tmp}")
-    end
-  end
-
   describe "#sshd_reload" do
     it "doesn't reload a config sshd -t rejects" do
       allow(session).to receive(:sudo).with("sshd -t").and_raise(Herd::CommandError, "bad config")
       allow(session).to receive(:systemctl_reload)
 
-      expect { session.sshd_reload }.to raise_error(Herd::CommandError)
+      expect { session.sshd_reload }.to raise_error(Herd::CommandError, /bad config/)
       expect(session).not_to have_received(:systemctl_reload)
+    end
+  end
+
+  describe "AcceptEnv lines" do
+    it "match at any indentation and in any case, but not a commented-out line" do
+      text = "AcceptEnv LANG\n  acceptenv LC_*\n\tAcceptEnv X\n#AcceptEnv Y\nAcceptEnvironment Z\n"
+      edited = text.gsub(described_class::ACCEPT_ENV) { "#{Regexp.last_match(1)}##{Regexp.last_match(2)}" }
+
+      expect(edited).to eq("#AcceptEnv LANG\n  #acceptenv LC_*\n\t#AcceptEnv X\n#AcceptEnv Y\nAcceptEnvironment Z\n")
     end
   end
 
@@ -81,13 +52,14 @@ RSpec.describe Herd::Commands::Ssh do
       allow(session).to receive(:run).and_return("")
       allow(session).to receive(:file_contains?).and_return(true)
       allow(session).to receive(:ssh_keygen).and_return("ssh-ed25519 AAAApub app@deploy@10.0.0.1")
-      allow(session).to receive(:expect_file_content_equals) { |path, content| written[path] = content }
+      allow(session).to receive(:install_file) { |path, content, **| written[path] = content }
       allow(described_class).to receive(:github_ssh_keys).and_return(github_keys)
     end
 
     it "returns the public key of a per-repo key" do
       expect(session.ssh_deploy_key("app")).to eq("ssh-ed25519 AAAApub app@deploy@10.0.0.1")
-      expect(session).to have_received(:ssh_keygen).with("~/.ssh/deploy_keys/app_ed25519", comment: "app@deploy@10.0.0.1")
+      expect(session).to have_received(:ssh_keygen).with("~/.ssh/deploy_keys/app_ed25519",
+                                                         comment: "app@deploy@10.0.0.1")
     end
 
     it "writes a github-<name> alias pinned to its own known_hosts file" do
@@ -115,6 +87,23 @@ RSpec.describe Herd::Commands::Ssh do
 
       expect(written["~/.ssh/known_hosts.d/gitlab.com"]).to eq("gitlab.com ssh-ed25519 AAAAgl")
       expect(written["~/.ssh/config.d/app.conf"]).to start_with("Host gitlab-app\n")
+    end
+
+    it "creates ~/.ssh before touching ~/.ssh/config" do
+      order = []
+      allow(session).to receive(:run) { |cmd, **| order << cmd and "" }
+      allow(session).to receive(:file_contains?) { order << :config and true }
+
+      session.ssh_deploy_key("app")
+
+      expect(order.first).to start_with("mkdir -p -m 700 -- \"$HOME\"/.ssh ")
+      expect(order.index(:config)).to be > 0
+    end
+
+    it "refuses names that would escape ~/.ssh or the alias" do
+      ["../x", "a b", "a\nHost *"].each do |name|
+        expect { session.ssh_deploy_key(name) }.to raise_error(ArgumentError)
+      end
     end
 
     it "refuses a non-GitHub host without known_hosts" do

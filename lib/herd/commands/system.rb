@@ -3,17 +3,21 @@
 module Herd
   module Commands
     module System
+      HOSTNAME = /\A[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)*\z/i
+
       def set_hostname(hostname)
+        raise ArgumentError, "set_hostname: invalid hostname #{hostname.inspect}" unless hostname.match?(HOSTNAME)
+
         current = run("hostname").chomp
         if current == hostname
           info("hostname already #{hostname}, skipping")
           return
         end
 
-        sudo("hostnamectl set-hostname #{hostname}")
+        sudo("hostnamectl set-hostname #{shell_args(hostname)}")
 
         if file_contains?("/etc/hosts", "127.0.1.1")
-          sudo("sed -i 's/^127\\.0\\.1\\.1.*/127.0.1.1\\t#{hostname}/' /etc/hosts")
+          replace_line_in_file("/etc/hosts", /^127\.0\.1\.1.*/, "127.0.1.1\t#{hostname}", sudo: true)
         else
           ensure_line_in_file("/etc/hosts", "127.0.1.1\t#{hostname}", sudo: true)
         end
@@ -38,7 +42,7 @@ module Herd
           return false
         end
 
-        sudo("timedatectl set-timezone #{timezone}")
+        sudo("timedatectl set-timezone #{shell_args(timezone)}")
         info("timezone set to #{timezone}")
         true
       end
@@ -47,12 +51,12 @@ module Herd
       # so names compare without case and dashes.
       def locale_generate(locale)
         normalize = ->(name) { name.strip.downcase.delete("-") }
-        if run("locale -a 2>/dev/null || true").lines.map(&normalize).include?(normalize.call(locale))
+        if run("locale -a", pty: false).lines.map(&normalize).include?(normalize.call(locale))
           info("locale #{locale} already generated, skipping")
           return false
         end
 
-        sudo("locale-gen #{locale}")
+        sudo("locale-gen #{shell_args(locale)}")
         info("locale #{locale} generated")
         true
       end
@@ -61,13 +65,15 @@ module Herd
       # Returns true if anything changed.
       def set_locale(locale)
         lang = "LANG=#{locale}"
-        if run("localectl status 2>/dev/null | grep 'System Locale' || true").include?(lang) &&
+        # localectl failing (no systemd) means the system locale isn't known to be set: set it.
+        status = run_result("localectl status", pty: false)
+        if status.success? && status.stdout.lines.grep(/System Locale/).join.include?(lang) &&
            file_exists?("/etc/default/locale") && read_file!("/etc/default/locale", sudo: true).strip == lang
           info("system locale already #{locale}, skipping")
           return false
         end
 
-        sudo("localectl set-locale #{lang}")
+        sudo("localectl set-locale #{shell_args(lang)}")
         expect_file_content_equals("/etc/default/locale", "#{lang}\n")
         info("system locale set to #{locale}")
         true

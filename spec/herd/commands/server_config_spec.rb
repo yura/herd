@@ -93,7 +93,9 @@ RSpec.describe Herd::Commands::ServerConfig do
     end
 
     it "refuses to rewrite anything but nil or a one-line string" do
-      expect { session_for("db").server_config_set(:computed, "x") }.to raise_error(Herd::CommandError, /not nil or a one-line/)
+      expect do
+        session_for("db").server_config_set(:computed, "x")
+      end.to raise_error(Herd::CommandError, /not nil or a one-line/)
     end
 
     it "refuses a heredoc, leaving the file loadable" do
@@ -114,7 +116,9 @@ RSpec.describe Herd::Commands::ServerConfig do
       end
 
       it "refuses to write, since the splat would win on reload" do
-        expect { session.server_config_set(:token, "x") }.to raise_error(Herd::CommandError, /overridden by a later \*\*splat/)
+        expect do
+          session.server_config_set(:token, "x")
+        end.to raise_error(Herd::CommandError, /overridden by a later \*\*splat/)
       end
     end
   end
@@ -122,5 +126,27 @@ RSpec.describe Herd::Commands::ServerConfig do
   it "refuses a host that didn't come from an inventory" do
     plain = Herd::Session.new(Herd::Host.new("10.0.0.2"), nil, nil, nil)
     expect { plain.server_config_key!(:x) }.to raise_error(ArgumentError, /not loaded from an inventory/)
+  end
+
+  describe "two herd processes writing the same inventory file" do
+    let(:keys) { (0...40).map { |i| :"k#{i}" } }
+
+    before do
+      File.write(file, %(register_server "web",\n  host: "10.0.0.1",\n#{keys.map { |k| "  #{k}: nil" }.join(",\n")}\n))
+    end
+
+    it "keeps every value each of them saved" do
+      pids = keys.each_slice(20).map do |slice|
+        fork do
+          s = session_for("web")
+          slice.each { |key| s.server_secret(key) }
+          exit!(0)
+        end
+      end
+      pids.each { |pid| Process.wait(pid) }
+
+      saved = Herd::Inventory.load(dir).servers.fetch("web")
+      expect(keys.count { |key| saved[key] }).to eq(40)
+    end
   end
 end

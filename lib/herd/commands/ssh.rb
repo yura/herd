@@ -10,7 +10,10 @@ module Herd
       CONFIG_D_DIR     = "~/.ssh/config.d"
       KNOWN_HOSTS_DIR  = "~/.ssh/known_hosts.d"
       CONFIG_D_INCLUDE = "Include ~/.ssh/config.d/*.conf"
+      SSH_DIR          = "~/.ssh"
       SSHD_CONFIG      = "/etc/ssh/sshd_config"
+      SSHD_CONFIG_D    = "/etc/ssh/sshd_config.d/*.conf"
+      ACCEPT_ENV       = /^([ \t]*)(AcceptEnv\b)/i
       GITHUB_META_URL  = "https://api.github.com/meta"
       GITHUB_META_LOCK = Mutex.new
 
@@ -28,21 +31,32 @@ module Herd
         end
       end
 
+      # Creates the key's directory (mode 700) if a fresh user doesn't have it yet.
       def ssh_keygen(key_path, comment: "#{host.user}@#{host.host}")
         unless file_exists?("#{key_path}.pub")
-          run("ssh-keygen -o -a 100 -t ed25519 -f #{key_path} -N '' -C '#{comment}' -q")
+          run("mkdir -p -m 700 -- #{shell_path(File.dirname(key_path))}")
+          run("ssh-keygen -o -a 100 -t ed25519 -f #{shell_path(key_path)} -N '' -C #{shell_args(comment)} -q")
           info("ssh key generated: #{key_path}")
         end
 
-        run("cat #{key_path}.pub").chomp
+        read_file("#{key_path}.pub")
       end
 
       # A deploy key works for one repo only, hence a key per repo behind a "github-<name>"
       # alias (git@github-<name>:owner/repo.git). Returns the public key.
       def ssh_deploy_key(name, git_host: "github.com", known_hosts: nil,
                          comment: "#{name}@#{host.user}@#{host.host}")
+        raise ArgumentError, "ssh_deploy_key: invalid name #{name.inspect}" unless name.to_s.match?(/\A[\w.-]+\z/)
+        unless git_host.match?(/\A[\w.-]+\z/)
+          raise ArgumentError,
+                "ssh_deploy_key: invalid git host #{git_host.inspect}"
+        end
+
+        # A fresh user has no ~/.ssh: create it before anything goes into it.
+        run("mkdir -p -m 700 -- #{[SSH_DIR, DEPLOY_KEYS_DIR, CONFIG_D_DIR, KNOWN_HOSTS_DIR].map do
+          shell_path(it)
+        end.join(" ")}")
         ssh_config_d_include
-        run("mkdir -p -m 700 #{DEPLOY_KEYS_DIR} #{CONFIG_D_DIR} #{KNOWN_HOSTS_DIR}")
 
         key_path = "#{DEPLOY_KEYS_DIR}/#{name}_ed25519"
         pub_key  = ssh_keygen(key_path, comment: comment)
@@ -57,19 +71,30 @@ module Herd
 
       # Stops sshd taking the client's LANG/LC_*: a Mac sends e.g. LC_CTYPE=UTF-8, unknown
       # on Linux, which breaks locale-sensitive tools. Returns true if the config changed.
-      # The edited copy is validated before it replaces the original, so a rejected
-      # config never lands on disk (where it could stop sshd starting after a reboot).
+      #
+      # Comments out every AcceptEnv line (indented ones too) in sshd_config and
+      # sshd_config.d/*.conf, keeping a copy of each file it changes, then checks the
+      # whole config with sshd -t. If anything fails the copies are put back, so a
+      # rejected config never stays on disk (where it could stop sshd after a reboot).
+      # AcceptEnv set in a file Included from elsewhere isn't edited: the final sshd -T
+      # check finds it and raises.
       def sshd_disable_accept_env
-        return false unless command_success?("grep -q '^AcceptEnv' #{SSHD_CONFIG}")
+        files   = [SSHD_CONFIG, *glob(SSHD_CONFIG_D, sudo: true)]
+        changes = files.filter_map do |path|
+          content = read_bytes(path, sudo: true).force_encoding(Encoding::UTF_8)
+          edited  = content.gsub(ACCEPT_ENV) { "#{Regexp.last_match(1)}##{Regexp.last_match(2)}" }
+          [path, edited] if edited != content
+        end
+        if changes.empty?
+          # Nothing to edit here, but an AcceptEnv Included from elsewhere may still be in effect.
+          sshd_refuse_accept_env!
+          return false
+        end
 
-        tmp = mktemp
-        run("sed 's/^AcceptEnv/#AcceptEnv/' #{SSHD_CONFIG} > #{shell_path(tmp)}")
-        sudo("sshd -t -f #{shell_path(tmp)}")
-        sudo("install -m 644 -o root -g root -- #{shell_path(tmp)} #{SSHD_CONFIG}")
+        sshd_install_validated(changes)
         systemctl_reload("ssh")
+        sshd_refuse_accept_env!
         true
-      ensure
-        run("rm -f -- #{shell_path(tmp)}") if tmp
       end
 
       # Validates the config first: reloading a broken one can lock you out.
@@ -112,10 +137,42 @@ module Herd
         ssh_chmod("~/.ssh/config", 600)
       end
 
-      # Touched as the user first, so the write needs neither sudo nor chown.
+      # The SSH user's own file, mode 600 from the moment it appears.
       def ssh_private_file(path, content)
-        run("touch -- #{shell_path(path)} && chmod -- 600 #{shell_path(path)}")
-        expect_file_content_equals(path, content)
+        install_file(path, content, mode: 600)
+      end
+
+      # Backs up each file, installs the edited content, then runs sshd -t on the whole
+      # config. Any failure restores every file from its backup, newest first.
+      def sshd_install_validated(changes)
+        installed = []
+        changes.each do |path, content|
+          sudo("cp -p -- #{shell_path(path)} #{shell_path("#{path}.herd-bak")}")
+          installed << path
+          install_file(path, content, sudo: true)
+        end
+        sudo("sshd -t")
+        validated = true
+      ensure
+        # In ensure with a flag rather than in rescue: an Interrupt midway restores too.
+        sshd_restore(installed) unless validated
+      end
+
+      def sshd_restore(paths)
+        paths.reverse_each do |path|
+          sudo("mv -f -- #{shell_path("#{path}.herd-bak")} #{shell_path(path)}")
+        rescue StandardError => e
+          info("could not restore #{path} from #{path}.herd-bak: #{e.message}")
+        end
+      end
+
+      # sshd -T prints the effective config; any acceptenv left means one we couldn't edit.
+      def sshd_refuse_accept_env!
+        left = sudo("sshd -T").lines.grep(/\Aacceptenv /i).map(&:strip)
+        return if left.empty?
+
+        raise Herd::CommandError, "sshd still accepts #{left.join(", ")}: set outside sshd_config and " \
+                                  "sshd_config.d, edit it by hand"
       end
 
       def ssh_alias_config(name, git_host, key_path, known_hosts_path)

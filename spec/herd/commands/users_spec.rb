@@ -1,97 +1,44 @@
 # frozen_string_literal: true
 
-require "open3"
-
+# What chpasswd receives and user lookups in a real shell are in spec/system/commands_spec.rb.
 RSpec.describe Herd::Commands::Users do
-  let(:session) { Herd::Session.new(mock_host, mock_ssh_session, "secret", mock_log) }
-  let(:mock_host) { instance_double(Herd::Host, user: "someone_else", password: "secret") }
-  let(:mock_ssh_session) { instance_double(Net::SSH::Connection::Session) }
-  let(:mock_ssh_channel) { instance_double(Net::SSH::Connection::Channel) }
-  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil, flush: nil) }
-  let(:captured_commands) { [] }
+  let(:session) { Herd::Session.new(host, nil, "secret", StringIO.new) }
+  let(:host) { instance_double(Herd::Host, user: "someone_else", add_secret: nil) }
+  let(:upload) { Herd::Transport::Upload.new(path: "/tmp/herd-upload.x", sensitive: true) }
 
   before do
-    allow(mock_ssh_session).to receive(:open_channel).and_yield(mock_ssh_channel)
-    allow(mock_ssh_session).to receive(:loop)
-    allow(mock_ssh_channel).to receive(:request_pty).and_yield(mock_ssh_channel, true)
-    allow(mock_ssh_channel).to receive(:on_extended_data)
-    allow(mock_ssh_channel).to receive(:on_request).with("exit-status")
-                                                    .and_yield(nil, instance_double(Net::SSH::Buffer, read_long: 0))
-    allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "")
-    allow(mock_ssh_channel).to receive(:exec) do |cmd, &blk|
-      captured_commands << cmd
-      blk.call(mock_ssh_channel, nil)
-    end
+    allow(session).to receive(:with_upload).and_yield(upload)
+    allow(session).to receive(:sudo)
+    allow(host).to receive(:password=)
   end
 
   it "is prepended into Session" do
     expect(Herd::Session.ancestors).to include(described_class)
   end
 
-  describe "#user_exists?" do
-    # Runs the real command through a shell: id's own output must not reach the comparison.
-    before do
-      allow(session).to receive(:run) { |cmd| Open3.capture2("bash", "-c", cmd).first }
-    end
-
-    it "is true for an existing user" do
-      expect(session.user_exists?(Etc.getlogin || ENV.fetch("USER"))).to be(true)
-    end
-
-    it "is false for a missing user" do
-      expect(session.user_exists?("herd_no_such_user")).to be(false)
-    end
-  end
-
   describe "#change_password" do
-    # Regression test: a naive string-match spec (asserting the exact command
-    # sent to Net::SSH) would just re-encode a quoting bug if the "expected"
-    # string is wrong too. Instead, run the actual composed command through a
-    # real shell and check the real password ends up on the far side of the
-    # pipe, catching cases where the password variable is never expanded
-    # (e.g. it stays as the literal `$HERD_PASS` text).
-    it "expands the new password value into the chpasswd input, not the literal env var name" do
-      session.change_password("footbot", "s3cr3tPass9")
+    it "uploads user:password as sensitive and feeds it to chpasswd as sensitive" do
+      session.change_password("footbot", "s3cr3t Pass$9")
 
-      remote_command = captured_commands.last.sub(/\Aset -o pipefail; /, "")
-      # swap the real `sudo ... chpasswd` (which needs root) for `cat`, so we
-      # can inspect exactly what would have been piped to chpasswd.
-      inspectable_command = remote_command.sub(/\|\s*sudo[^|]*chpasswd\s*\z/, "| cat")
-
-      stdout, status = Open3.capture2("bash", "-c", inspectable_command)
-
-      expect(status).to be_success
-      expect(stdout.strip).to eq("footbot:s3cr3tPass9")
+      expect(session).to have_received(:with_upload).with("footbot:s3cr3t Pass$9\n", sensitive: true)
+      expect(session).to have_received(:sudo).with("chpasswd < /tmp/herd-upload.x", sensitive: true)
+      expect(host).to have_received(:add_secret).with("s3cr3t Pass$9")
     end
 
-    it "passes spaces, quotes and $() through to chpasswd literally" do
-      password = %(alpha beta $(echo pwned) 'q" \\ end)
-      session.change_password("footbot", password)
-
-      inspectable_command = captured_commands.last.sub(/\Aset -o pipefail; /, "")
-                                             .sub(/\|\s*sudo[^|]*chpasswd\s*\z/, "| cat")
-
-      expect(Open3.capture2("bash", "-c", inspectable_command).first.chomp).to eq("footbot:#{password}")
+    it "refuses input that would make chpasswd read another line" do
+      expect { session.change_password("footbot", "a\nroot:x") }.to raise_error(ArgumentError)
+      expect { session.change_password("foot:bot", "x") }.to raise_error(ArgumentError)
+      expect(session).not_to have_received(:sudo)
     end
 
-    it "updates host.password when changing the ssh user's own password" do
-      host = instance_double(Herd::Host, user: "footbot")
-      allow(host).to receive(:password=)
-      session_with_host = Herd::Session.new(host, mock_ssh_session, "secret", mock_log)
+    it "updates host.password only when changing the SSH user's own password" do
+      allow(host).to receive(:user).and_return("footbot")
 
-      session_with_host.change_password("footbot", "s3cr3tPass9")
-
-      expect(host).to have_received(:password=).with("s3cr3tPass9")
-    end
-
-    it "does not update host.password when changing a different user's password" do
-      host = instance_double(Herd::Host, user: "footbot")
-      allow(host).to receive(:password=)
-      session_with_host = Herd::Session.new(host, mock_ssh_session, "secret", mock_log)
-
-      session_with_host.change_password("someoneelse", "s3cr3tPass9")
-
+      session.change_password("someoneelse", "a")
       expect(host).not_to have_received(:password=)
+
+      session.change_password("footbot", "b")
+      expect(host).to have_received(:password=).with("b")
     end
   end
 end

@@ -1,22 +1,15 @@
 # frozen_string_literal: true
 
 RSpec.describe Herd::Commands::System do
-  let(:session) { Herd::Session.new(nil, mock_ssh_session, "secret", mock_log) }
-  let(:mock_ssh_session) { instance_double(Net::SSH::Connection::Session) }
-  let(:mock_ssh_channel) { instance_double(Net::SSH::Connection::Channel) }
-  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil, flush: nil) }
+  let(:session) { Herd::Session.new(nil, nil, "secret", log) }
+  let(:output) do
+    +"Europe/Paris
+"
+  end
+  let(:log) { StringIO.new }
 
   before do
-    allow(mock_ssh_session).to receive(:open_channel).and_yield(mock_ssh_channel)
-    allow(mock_ssh_session).to receive(:loop)
-    allow(mock_ssh_channel).to receive(:request_pty).and_yield(mock_ssh_channel, true)
-    allow(mock_ssh_channel).to receive(:on_extended_data)
-    allow(mock_ssh_channel).to receive(:on_request).with("exit-status")
-                                                   .and_yield(nil, instance_double(Net::SSH::Buffer, read_long: 0))
-    allow(mock_ssh_channel).to receive(:exec)
-      .with("set -o pipefail; timedatectl show -p Timezone --value 2>/dev/null || cat /etc/timezone")
-      .and_yield(mock_ssh_channel, nil)
-    allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "Europe/Paris\n")
+    allow(session).to receive(:run_result) { Herd::CommandResult.new(stdout: output, exit_code: 0) }
   end
 
   it "is prepended into Session" do
@@ -32,7 +25,7 @@ RSpec.describe Herd::Commands::System do
       session.system_timezone
       session.system_timezone
 
-      expect(mock_ssh_channel).to have_received(:exec).twice
+      expect(session).to have_received(:run_result).twice
     end
   end
 end

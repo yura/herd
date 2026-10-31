@@ -40,4 +40,15 @@ RSpec.describe Herd::Runner do
       end
     end
   end
+
+  describe "exec_results" do
+    it "returns each host's value or error, a failed connection included, without raising" do
+      refused = Herd::CommandError.new("cannot connect — connection refused")
+      allow(first_host).to receive(:exec).and_return("alpha001")
+      allow(second_host).to receive(:exec).and_raise(refused)
+
+      expect(runner.exec_results("hostname")).to eq([[first_host, "alpha001", nil], [second_host, nil, refused]])
+      expect { runner.exec("hostname") }.to raise_error(refused)
+    end
+  end
 end

@@ -1,3 +1,5 @@
 --format documentation
 --color
 --require spec_helper
+# spec/integration needs a .env with a real host; run it explicitly: bundle exec rspec spec/integration
+--exclude-pattern spec/integration/**/*_spec.rb

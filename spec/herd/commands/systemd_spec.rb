@@ -1,12 +1,37 @@
 # frozen_string_literal: true
 
 RSpec.describe Herd::Commands::Systemd do
-  let(:session) { Herd::Session.new(nil, mock_ssh_session, "secret", mock_log) }
-  let(:mock_ssh_session) { instance_double(Net::SSH::Connection::Session) }
-  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil, flush: nil) }
+  # visudo and systemctl themselves are exercised in spec/system/systemd_spec.rb.
+  let(:session) { Herd::Session.new(nil, nil, "secret", StringIO.new) }
 
   it "is prepended into Session" do
     expect(Herd::Session.ancestors).to include(described_class)
+  end
+
+  describe ".unit_name" do
+    it "adds .service unless the name ends in a unit type" do
+      { "puma" => "puma.service", "puma.service" => "puma.service", "backup.timer" => "backup.timer",
+        "worker@reid.1" => "worker@reid.1.service", "app@" => "app@.service", "my.app" => "my.app.service" }
+        .each { |name, unit| expect(described_class.unit_name(name)).to eq(unit) }
+    end
+
+    it "refuses names systemd wouldn't accept" do
+      ["puma; reboot", "a b", "$(x)", ""].each do |name|
+        expect { described_class.unit_name(name) }.to raise_error(ArgumentError)
+      end
+    end
+  end
+
+  describe "systemctl commands" do
+    before { allow(session).to receive(:sudo) }
+
+    it "normalize the unit name the same way systemd_unit does" do
+      session.systemctl_restart("worker@reid.1")
+      session.systemctl_enable("puma", now: true)
+
+      expect(session).to have_received(:sudo).with("systemctl restart worker@reid.1.service")
+      expect(session).to have_received(:sudo).with("systemctl enable --now puma.service")
+    end
   end
 
   describe "#systemd_unit" do
@@ -59,13 +84,14 @@ RSpec.describe Herd::Commands::Systemd do
   end
 
   describe "#systemd_allow_actions" do
+    let(:written) { [] }
+
     before do
-      allow(session).to receive(:expect_file_content_equals)
-      allow(session).to receive(:file_permissions)
+      allow(session).to receive(:install_file) { |path, content, **opts| written << [path, content, opts] }
     end
 
-    it "writes NOPASSWD lines for the default actions across all units" do
-      session.systemd_allow_actions("/etc/sudoers.d/00-app", user: "footbot", units: %w[puma solid_queue])
+    it "writes NOPASSWD lines for the default actions across all units, checked by visudo" do
+      session.systemd_allow_actions("/etc/sudoers.d/00-app", user: "footbot", units: %w[puma solid_queue.service])
 
       expected_content = <<~SUDOERS
         # Managed by Herd. Do not edit manually.
@@ -80,41 +106,30 @@ RSpec.describe Herd::Commands::Systemd do
         footbot ALL=(ALL) NOPASSWD: /usr/bin/systemctl status solid_queue.service
       SUDOERS
 
-      expect(session).to have_received(:expect_file_content_equals).with("/etc/sudoers.d/00-app", expected_content)
+      expect(written).to eq([["/etc/sudoers.d/00-app", expected_content,
+                              { owner: "root", group: "root", mode: 440, sudo: true, validate: "visudo -cf %{staged}" }]])
     end
 
-    it "accepts a single unit as a bare string" do
-      session.systemd_allow_actions("/etc/sudoers.d/00-app", user: "footbot", units: "puma")
+    it "escapes characters sudoers treats specially in a unit name" do
+      session.systemd_allow_actions("/etc/sudoers.d/00-app", user: "footbot", units: "sys-dev:x", actions: %w[start])
 
-      expect(session).to have_received(:expect_file_content_equals) do |_path, content|
-        expect(content).to include("footbot ALL=(ALL) NOPASSWD: /usr/bin/systemctl start puma.service")
-      end
+      expect(written.last[1]).to include("/usr/bin/systemctl start sys-dev\\:x.service")
     end
 
-    it "restricts to the given actions when overridden" do
-      session.systemd_allow_actions("/etc/sudoers.d/01-nginx", user: "footbot", units: "nginx", actions: %w[reload])
-
-      expect(session).to have_received(:expect_file_content_equals) do |_path, content|
-        expect(content).to include("footbot ALL=(ALL) NOPASSWD: /usr/bin/systemctl reload nginx.service")
-        expect(content).not_to include("start")
-      end
-    end
-
-    it "sets sudoers file permissions to 440" do
-      session.systemd_allow_actions("/etc/sudoers.d/00-app", user: "footbot", units: "puma")
-      expect(session).to have_received(:file_permissions).with("/etc/sudoers.d/00-app", 440)
+    it "refuses a user or action that could change the rule" do
+      expect { session.systemd_allow_actions("/x", user: "a ALL", units: "puma") }.to raise_error(ArgumentError)
+      expect { session.systemd_allow_actions("/x", user: "a", units: "puma", actions: ["start *"]) }
+        .to raise_error(ArgumentError)
+      expect(written).to be_empty
     end
 
     it "documents that pointing two calls at the same sudoers_path overwrites rather than merges" do
-      written = []
-      allow(session).to receive(:expect_file_content_equals) { |_path, content| written << content }
-
       session.systemd_allow_actions("/etc/sudoers.d/00-app", user: "footbot", units: "puma")
       session.systemd_allow_actions("/etc/sudoers.d/00-app", user: "footbot", units: "solid_queue")
 
       # the second call's content is the last thing written — no trace of "puma" survives
-      expect(written.last).not_to include("puma")
-      expect(written.last).to include("solid_queue")
+      expect(written.last[1]).not_to include("puma")
+      expect(written.last[1]).to include("solid_queue")
     end
   end
 end

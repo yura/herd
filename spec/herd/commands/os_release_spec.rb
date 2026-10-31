@@ -1,11 +1,9 @@
 # frozen_string_literal: true
 
 RSpec.describe Herd::Commands::OsRelease do
-  let(:session) { Herd::Session.new(nil, mock_ssh_session, "secret", mock_log) }
-  let(:mock_ssh_session) { instance_double(Net::SSH::Connection::Session) }
-  let(:mock_ssh_channel) { instance_double(Net::SSH::Connection::Channel) }
-  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil, flush: nil) }
-
+  let(:session) { Herd::Session.new(nil, nil, "secret", log) }
+  let(:output) { +os_release_output }
+  let(:log) { StringIO.new }
   let(:os_release_output) do
     <<~OS_RELEASE
       PRETTY_NAME="Ubuntu 24.04.1 LTS"
@@ -19,16 +17,7 @@ RSpec.describe Herd::Commands::OsRelease do
   end
 
   before do
-    allow(mock_ssh_session).to receive(:open_channel).and_yield(mock_ssh_channel)
-    allow(mock_ssh_session).to receive(:loop)
-    allow(mock_ssh_channel).to receive(:request_pty).and_yield(mock_ssh_channel, true)
-    allow(mock_ssh_channel).to receive(:on_extended_data)
-    allow(mock_ssh_channel).to receive(:on_request).with("exit-status")
-                                                   .and_yield(nil, instance_double(Net::SSH::Buffer, read_long: 0))
-    allow(mock_ssh_channel).to receive(:exec)
-      .with("set -o pipefail; cat /etc/os-release")
-      .and_yield(mock_ssh_channel, nil)
-    allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, os_release_output)
+    allow(session).to receive(:run_result) { Herd::CommandResult.new(stdout: output, exit_code: 0) }
   end
 
   it "is prepended into Session" do
@@ -49,7 +38,7 @@ RSpec.describe Herd::Commands::OsRelease do
       session.os_release
       session.os_release
 
-      expect(mock_ssh_channel).to have_received(:exec).once
+      expect(session).to have_received(:run_result).once
     end
   end
 
@@ -68,11 +57,11 @@ RSpec.describe Herd::Commands::OsRelease do
       expect(session.os_version).to eq("24.04")
 
       # simulate the OS having changed since the connection opened (e.g. a distro upgrade)
-      allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, upgraded_os_release_output)
+      output.replace(upgraded_os_release_output)
       session.refresh_os_release
 
       expect(session.os_version).to eq("26.04")
-      expect(mock_ssh_channel).to have_received(:exec).twice
+      expect(session).to have_received(:run_result).twice
     end
   end
 

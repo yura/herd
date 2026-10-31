@@ -39,7 +39,7 @@ module Herd
           return false
         end
 
-        run("#{RBENV} install #{version}")
+        run("#{RBENV} install #{shell_args(version)}")
         info("ruby #{version} installed")
         true
       end
@@ -51,26 +51,29 @@ module Herd
           return false
         end
 
-        run("#{RBENV} global #{version}")
+        run("#{RBENV} global #{shell_args(version)}")
         info("ruby #{version} set as global")
         true
       end
 
-      def bundle(*args)
-        run("#{RBENV_BUNDLE} #{args.join(" ")}")
+      # bundle, rails and rake pass each argument as one word, quoted for the shell:
+      # bundle("install", "--deployment"), rails("runner", "User.where(admin: true).count").
+      # Several words in one string stay one argument.
+      def bundle(*)
+        run("#{RBENV_BUNDLE} #{shell_args(*)}")
       end
 
-      def rails(*args, env: "production")
-        run("RAILS_ENV=#{env} #{RBENV_RAILS} #{args.join(" ")}")
+      def rails(*, env: "production")
+        run("RAILS_ENV=#{shell_args(env)} #{RBENV_RAILS} #{shell_args(*)}")
       end
 
       def rails_runner(code, env: "production", warnings: false)
         redirect = warnings ? "" : " 2>/dev/null"
-        run("RUBYOPT='-E UTF-8:UTF-8' RAILS_ENV=#{env} #{RBENV_RAILS} runner #{code.shellescape}#{redirect}")
+        run("RUBYOPT='-E UTF-8:UTF-8' RAILS_ENV=#{shell_args(env)} #{RBENV_RAILS} runner #{code.shellescape}#{redirect}")
       end
 
-      def rake(*args, env: "production")
-        run("RAILS_ENV=#{env} #{RBENV_RAKE} #{args.join(" ")}")
+      def rake(*, env: "production")
+        run("RAILS_ENV=#{shell_args(env)} #{RBENV_RAKE} #{shell_args(*)}")
       end
     end
   end

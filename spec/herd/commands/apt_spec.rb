@@ -1,25 +1,12 @@
 # frozen_string_literal: true
 
 RSpec.describe Herd::Commands::Apt do
-  let(:session) { Herd::Session.new(nil, mock_ssh_session, "secret", mock_log) }
-  let(:mock_ssh_session) { instance_double(Net::SSH::Connection::Session) }
-  let(:mock_ssh_channel) { instance_double(Net::SSH::Connection::Channel) }
-  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil, flush: nil) }
+  let(:session) { Herd::Session.new(nil, nil, "secret", log) }
+  let(:output) { +"" }
+  let(:log) { StringIO.new }
 
   before do
-    allow(mock_ssh_session).to receive(:open_channel).and_yield(mock_ssh_channel)
-    allow(mock_ssh_session).to receive(:loop)
-    allow(mock_ssh_channel).to receive(:request_pty).and_yield(mock_ssh_channel, true)
-    allow(mock_ssh_channel).to receive(:on_extended_data)
-    allow(mock_ssh_channel).to receive(:on_request).with("exit-status")
-                                                   .and_yield(nil, instance_double(Net::SSH::Buffer, read_long: 0))
-  end
-
-  def stub_command(cmd)
-    allow(mock_ssh_channel).to receive(:exec)
-      .with("set -o pipefail; #{cmd}")
-      .and_yield(mock_ssh_channel, nil)
-    allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "")
+    allow(session).to receive(:run_result) { Herd::CommandResult.new(stdout: output, exit_code: 0) }
   end
 
   it "is prepended into Session" do
@@ -28,101 +15,128 @@ RSpec.describe Herd::Commands::Apt do
 
   describe "#apt_update" do
     it "runs apt update" do
-      stub_command("sudo -p 'HERD_SUDO: ' apt update -qq")
       session.apt_update
-      expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; sudo -p 'HERD_SUDO: ' apt update -qq")
+      expect(session).to have_received(:run_result).with("sudo -p 'HERD_SUDO: ' apt update -qq", sudo_prompt: true)
     end
   end
 
   describe "#apt_upgrade" do
     it "runs apt upgrade non-interactively" do
-      stub_command("sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt upgrade -qq -y")
       session.apt_upgrade
-      expect(mock_ssh_channel).to have_received(:exec)
-        .with("set -o pipefail; sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt upgrade -qq -y")
+      expect(session).to have_received(:run_result).with(
+        "sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt upgrade -qq -y", sudo_prompt: true
+      )
     end
   end
 
   describe "#apt_install" do
     it "installs a single package" do
-      stub_command("sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl")
       session.apt_install("curl")
-      expect(mock_ssh_channel).to have_received(:exec)
-        .with("set -o pipefail; sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl")
+      expect(session).to have_received(:run_result).with(
+        "sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl", sudo_prompt: true
+      )
     end
 
     it "installs multiple packages" do
-      stub_command("sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git vim")
       session.apt_install("curl", "git", "vim")
-      expect(mock_ssh_channel).to have_received(:exec)
-        .with("set -o pipefail; sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git vim")
+      expect(session).to have_received(:run_result).with(
+        "sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git vim", sudo_prompt: true
+      )
     end
 
     it "accepts an array of packages" do
-      stub_command("sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git")
       session.apt_install(%w[curl git])
-      expect(mock_ssh_channel).to have_received(:exec)
-        .with("set -o pipefail; sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git")
+      expect(session).to have_received(:run_result).with(
+        "sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y curl git", sudo_prompt: true
+      )
     end
 
     it "adds --force-confnew when confnew: true" do
-      stub_command("sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y -o Dpkg::Options::='--force-confnew' postgresql-16")
       session.apt_install("postgresql-16", confnew: true)
-      expect(mock_ssh_channel).to have_received(:exec)
-        .with("set -o pipefail; sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y -o Dpkg::Options::='--force-confnew' postgresql-16")
+      expect(session).to have_received(:run_result).with(
+        "sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y -o Dpkg::Options::\\=--force-confnew postgresql-16", sudo_prompt: true
+      )
     end
   end
 
   describe "#apt_remove" do
     it "removes packages" do
-      stub_command("sudo -p 'HERD_SUDO: ' apt remove -qq -y curl")
       session.apt_remove("curl")
-      expect(mock_ssh_channel).to have_received(:exec)
-        .with("set -o pipefail; sudo -p 'HERD_SUDO: ' apt remove -qq -y curl")
+      expect(session).to have_received(:run_result).with("sudo -p 'HERD_SUDO: ' apt remove -qq -y curl",
+                                                         sudo_prompt: true)
     end
   end
 
   describe "#apt_autoremove" do
     it "runs apt autoremove" do
-      stub_command("sudo -p 'HERD_SUDO: ' apt autoremove -qq -y")
       session.apt_autoremove
-      expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; sudo -p 'HERD_SUDO: ' apt autoremove -qq -y")
+      expect(session).to have_received(:run_result).with("sudo -p 'HERD_SUDO: ' apt autoremove -qq -y",
+                                                         sudo_prompt: true)
     end
   end
 
-  describe "#apt_installed?" do
-    let(:check_cmd) { "set -o pipefail; dpkg -l curl 2>/dev/null | grep -q '^ii' && echo yes || echo no" }
-
-    before do
-      allow(mock_ssh_channel).to receive(:exec).with(check_cmd).and_yield(mock_ssh_channel, nil)
+  describe "package names" do
+    it "refuses names that aren't package names before running anything" do
+      ["-o APT::x", "curl; rm -rf /", "a b", ""].each do |name|
+        expect { session.apt_install(name) }.to raise_error(ArgumentError)
+      end
+      expect(session).not_to have_received(:run_result)
     end
 
-    it "returns true when package is installed" do
-      allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "yes")
-      expect(session.apt_installed?("curl")).to be true
-    end
+    it "accepts versions, architectures and releases" do
+      session.apt_install("nginx=1.24.0-1", "libc6:amd64", "git/noble-backports")
 
-    it "returns false when package is not installed" do
-      allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "no")
-      expect(session.apt_installed?("curl")).to be false
+      expect(session).to have_received(:run_result)
+        .with(a_string_ending_with("apt install -qq -y nginx\\=1.24.0-1 libc6:amd64 git/noble-backports"), sudo_prompt: true)
     end
   end
 
-  describe "#apt_version" do
-    let(:check_cmd) { "set -o pipefail; dpkg-query -W -f='${Version}' curl 2>/dev/null || true" }
+  describe "local .deb files" do
+    it "passes paths to apt_install as paths, escaped, ~ as the SSH user's home" do
+      session.apt_install("/tmp/my pkg.deb", "./x.deb", "~/debs/y.deb", "curl")
 
-    before do
-      allow(mock_ssh_channel).to receive(:exec).with(check_cmd).and_yield(mock_ssh_channel, nil)
+      expect(session).to have_received(:run_result).with(
+        "sudo -p 'HERD_SUDO: ' DEBIAN_FRONTEND=noninteractive apt install -qq -y " \
+        "/tmp/my\\ pkg.deb ./x.deb \"$HOME\"/debs/y.deb curl", sudo_prompt: true
+      )
     end
 
-    it "returns the installed version string" do
-      allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "7.81.0-1ubuntu1.20")
-      expect(session.apt_version("curl")).to eq("7.81.0-1ubuntu1.20")
+    it "keeps refusing paths where only package names make sense" do
+      expect { session.apt_remove("/tmp/x.deb") }.to raise_error(ArgumentError)
+      expect { session.apt_install("x.deb; rm -rf /") }.to raise_error(ArgumentError)
+    end
+  end
+
+  describe "#apt_installed? and #apt_version" do
+    def dpkg(status, version: "7.81.0-1ubuntu1.20", exit_code: 0)
+      allow(session).to receive(:run_result) do |command, **|
+        out = command.include?("Status") ? status : version
+        Herd::CommandResult.new(stdout: out, stderr: exit_code == 1 ? "no packages found" : "", exit_code: exit_code)
+      end
     end
 
-    it "returns nil when the package is not installed" do
-      allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "")
-      expect(session.apt_version("curl")).to be_nil
+    it "reports an installed package and its version" do
+      dpkg("install ok installed")
+
+      expect([session.apt_installed?("curl"), session.apt_version("curl")]).to eq([true, "7.81.0-1ubuntu1.20"])
+    end
+
+    it "doesn't count a removed package whose config files remain" do
+      dpkg("deinstall ok config-files")
+
+      expect([session.apt_installed?("curl"), session.apt_version("curl")]).to eq([false, nil])
+    end
+
+    it "returns false and nil for a package dpkg doesn't know" do
+      dpkg("", exit_code: 1)
+
+      expect([session.apt_installed?("curl"), session.apt_version("curl")]).to eq([false, nil])
+    end
+
+    it "raises when dpkg-query itself fails" do
+      dpkg("", exit_code: 2)
+
+      expect { session.apt_installed?("curl") }.to raise_error(Herd::CommandError)
     end
   end
 end
