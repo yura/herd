@@ -28,10 +28,10 @@ module Herd
       private
 
       def package_manager
-        @package_manager ||= begin
-          out = run("which apt-get > /dev/null 2>&1 && echo apt || which yum > /dev/null 2>&1 && echo yum || echo unknown").strip
-          out.to_sym
-        end
+        # if/elif, not && / ||: those chain left to right and print "apt\nyum" when apt exists.
+        @package_manager ||= run("if command -v apt-get >/dev/null 2>&1; then echo apt; " \
+                                 "elif command -v yum >/dev/null 2>&1; then echo yum; " \
+                                 "else echo unknown; fi").strip.to_sym
       end
     end
   end
