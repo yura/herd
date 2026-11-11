@@ -31,7 +31,9 @@ or use key-based auth (`keys: ["~/.ssh/id_ed25519"]`).
 
 ## Deployer — Hook DSL
 
-Hook files live in a `deploy/` directory and are named `<full-40-char-sha>_description.rb`. Each hook is tied to a specific commit — the deployer checks whether that commit exists in the app's git log, skips already-applied hooks, and runs the rest in commit-timestamp order before the after-block. Applied hooks are tracked in `~/.herd_deploy/<app>/` on each server, so they run exactly once.
+Hook files live in a `deploy/` directory and are named `<full-40-char-sha>_description.rb`. Each hook is tied to a specific commit and runs only once that commit is in the history of the deployed `HEAD` — a commit on another branch or a reverted release doesn't count. Pending hooks run parents first (topological order, not commit dates), several hooks of one commit in file name order, before the after block. Applied hooks are recorded in `~/.herd_deploy/<app_id>/` on each server and aren't run again.
+
+A hook is recorded only after its `actions` and `checks` passed. A hook that failed or was interrupted before that (an error halfway through `actions`, `checks` returning `false`, a dropped connection) runs again on the next deploy — write `actions` so that repeating them after a partial run is safe, e.g. `CREATE INDEX IF NOT EXISTS` rather than `CREATE INDEX`.
 
 Hook DSL supports three blocks, all optional:
 
@@ -52,7 +54,7 @@ end
 
 checks do
   # runs after actions to verify the result
-  # raise or return false to mark hook as failed
+  # raise or return false to fail the hook (nil passes); a failed hook isn't recorded
   apt_installed? "libvips-dev"
 end
 ```
@@ -60,6 +62,6 @@ end
 To preview pending hooks without applying them:
 
 ```ruby
-deployer.check_hooks                  # dry_run: true by default
-deployer.check_hooks(dry_run: false)  # apply
+deployer.check_hooks                  # dry_run: true by default: changes nothing, runs only pre_conditions
+deployer.check_hooks(dry_run: false)  # apply, without pulling
 ```

@@ -1,94 +1,61 @@
 # frozen_string_literal: true
 
-require "net/ssh"
-
+# Channel handling (sudo prompt, stderr, exit status, stdin, timeout) is in session_transport_spec.
 RSpec.describe Herd::Session do
-  let(:session) { described_class.new(nil, mock_ssh_session, "T0pS3kr3t", mock_log) }
-  let(:mock_ssh_session) { instance_double(Net::SSH::Connection::Session) }
-  let(:mock_ssh_channel) { instance_double(Net::SSH::Connection::Channel) }
-  let(:mock_log) { instance_double(File, puts: nil, print: nil, close: nil, flush: nil) }
-
-  before do
-    allow(mock_ssh_session).to receive(:open_channel).and_yield(mock_ssh_channel)
-    allow(mock_ssh_session).to receive(:loop)
-
-    allow(mock_ssh_channel).to receive(:request_pty).and_yield(mock_ssh_channel, true)
-    allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; hostname").and_yield(mock_ssh_channel, nil)
-    allow(mock_ssh_channel).to receive(:on_data).and_yield(nil, "alpha001")
-    allow(mock_ssh_channel).to receive(:on_extended_data)
-    allow(mock_ssh_channel).to receive(:on_request).with("exit-status").and_yield(nil,
-                                                                                  instance_double(Net::SSH::Buffer,
-                                                                                                  read_long: 0))
-  end
+  let(:session) { described_class.new(nil, nil, "T0pS3kr3t", log) }
+  let(:log) { StringIO.new }
 
   describe "#method_missing" do
-    before do
-      allow(mock_ssh_session).to receive(:exec!).with("set -o pipefail; hostname").and_yield(nil, :stdout, "alpha001")
-    end
+    it "runs the call as a command" do
+      allow(session).to receive(:run_result).and_return(Herd::CommandResult.new(stdout: "alpha001", exit_code: 0))
 
-    it "delegates calls to SSH session" do
-      session.hostname
-      expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; hostname")
-    end
-
-    it "returns command output" do
       expect(session.hostname).to eq("alpha001")
+      expect(session).to have_received(:run_result).with("hostname")
     end
   end
 
-  context "with AuthorizedKeys commands" do
-    it "preprends authorized keys helpers" do
-      expect(described_class.ancestors).to include(Herd::Commands::AuthorizedKeys)
+  describe "#respond_to?" do
+    it "answers for OS commands without raising" do
+      expect(session.respond_to?(:hostname)).to be(true)
+      expect(session.respond_to?(:no_such_thing)).to be(false)
+    end
+  end
+
+  describe "#run_result" do
+    it "refuses stdin on a PTY, where the terminal would rewrite it" do
+      expect { session.run_result("cat", stdin: "x") }.to raise_error(ArgumentError)
+    end
+  end
+
+  describe "#with_env" do
+    it "refuses names that aren't variable names before running anything" do
+      allow(session).to receive(:ssh_execute)
+
+      ["HERD-INVALID", "A B", "1X", "X;rm"].each do |name|
+        expect { session.with_env(name => "x") { session.run("true") } }.to raise_error(ArgumentError)
+      end
+      expect(session).not_to have_received(:ssh_execute)
+    end
+  end
+
+  describe "sensitive: true" do
+    before do
+      allow(session).to receive(:ssh_execute).and_return(Herd::CommandResult.new(stdout: "hunter22", exit_code: 1))
     end
 
-    describe "#authorized_keys" do
-      before do
-        allow(mock_ssh_channel).to receive(:exec)
-          .with("set -o pipefail; test -e ~/.ssh/authorized_keys && echo yes || echo no")
-          .and_yield(mock_ssh_channel, nil)
-        allow(mock_ssh_channel).to receive(:exec)
-          .with("set -o pipefail; cat ~/.ssh/authorized_keys")
-          .and_yield(mock_ssh_channel, nil)
-
-        responses = ["yes", "key1\nkey2\n"]
-        allow(mock_ssh_channel).to receive(:on_data) { |&blk| blk.call(nil, responses.shift) } # rubocop:disable RSpec/Yield
-      end
-
-      it "returns list of remote authorized keys" do
-        expect(session.authorized_keys).to eq(%w[key1 key2])
-      end
+    it "keeps the command and output out of the log and the exception" do
+      expect { session.run("echo hunter22; exit 1", sensitive: true) }
+        .to raise_error(Herd::CommandError) { |e| expect(e.message).not_to include("hunter22") }
+      expect(log.string).not_to include("hunter22")
+      expect(log.string).to include("[redacted]")
     end
+  end
 
-    describe "#add_authorized_key" do
-      let(:public_key) { "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC" }
+  describe "#command_success?" do
+    it "propagates transport failures instead of answering false" do
+      allow(session).to receive(:ssh_execute).and_raise(Net::SSH::Disconnect, "disconnected")
 
-      before do
-        allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; touch ~/.ssh/authorized_keys")
-                                                 .and_yield(mock_ssh_channel, nil)
-        allow(mock_ssh_channel).to receive(:exec).with("set -o pipefail; sudo -p 'HERD_SUDO: ' chmod 600 ~/.ssh/authorized_keys")
-                                                 .and_yield(mock_ssh_channel, nil)
-        allow(mock_ssh_channel).to \
-          receive(:exec).with("set -o pipefail; tee -a ~/.ssh/authorized_keys << \"EOF\"\n#{public_key}\nEOF")
-                        .and_yield(mock_ssh_channel, nil)
-      end
-
-      it "touches the authorized keys file" do
-        session.add_authorized_key(public_key)
-
-        expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; touch ~/.ssh/authorized_keys")
-      end
-
-      it "sets strict permissions on authorized keys file" do
-        session.add_authorized_key(public_key)
-
-        expect(mock_ssh_channel).to have_received(:exec).with("set -o pipefail; sudo -p 'HERD_SUDO: ' chmod 600 ~/.ssh/authorized_keys")
-      end
-
-      it "appends the key into authorized keys file" do
-        session.add_authorized_key(public_key)
-        command = "set -o pipefail; tee -a ~/.ssh/authorized_keys << \"EOF\"\n#{public_key}\nEOF"
-        expect(mock_ssh_channel).to have_received(:exec).with(command)
-      end
+      expect { session.command_success?("true") }.to raise_error(Net::SSH::Disconnect, "disconnected")
     end
   end
 end
