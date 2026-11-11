@@ -29,6 +29,8 @@ RSpec.describe "commands ported from footbot recipes" do # rubocop:disable RSpec
       allow(session).to receive(:sudo)
       allow(session).to receive(:expect_file_content_equals)
       allow(session).to receive(:file_exists?).with("/etc/default/locale").and_return(true)
+      allow(session).to receive(:run).with("readlink -f -- /etc/default/locale", pty: false)
+                                     .and_return("/etc/default/locale\n")
       allow(session).to receive(:run_result).with("localectl status", pty: false)
                                             .and_return(Herd::CommandResult.new(stdout: localectl, exit_code: 0))
     end
@@ -48,6 +50,15 @@ RSpec.describe "commands ported from footbot recipes" do # rubocop:disable RSpec
       expect(session.set_locale("en_US.UTF-8")).to be(true)
       expect(session).to have_received(:sudo).with("localectl set-locale LANG\\=en_US.UTF-8")
       expect(session).to have_received(:expect_file_content_equals).with("/etc/default/locale", "LANG=en_US.UTF-8\n")
+    end
+
+    it "writes through to the target when /etc/default/locale is a symlink" do
+      allow(session).to receive(:read_file!).and_return("LANG=en_US.UTF-8\nLC_TIME=en_GB.UTF-8\n")
+      allow(session).to receive(:run).with("readlink -f -- /etc/default/locale", pty: false)
+                                     .and_return("/etc/locale.conf\n")
+
+      expect(session.set_locale("en_US.UTF-8")).to be(true)
+      expect(session).to have_received(:expect_file_content_equals).with("/etc/locale.conf", "LANG=en_US.UTF-8\n")
     end
 
     it "sets the locale when localectl can't report it" do

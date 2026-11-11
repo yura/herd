@@ -74,7 +74,9 @@ module Herd
         end
 
         sudo("localectl set-locale #{shell_args(lang)}")
-        expect_file_content_equals("/etc/default/locale", "#{lang}\n")
+        # Ubuntu 26.04 makes /etc/default/locale a symlink to /etc/locale.conf; write the target.
+        path = run("readlink -f -- /etc/default/locale", pty: false).strip
+        expect_file_content_equals(path, "#{lang}\n")
         info("system locale set to #{locale}")
         true
       end
