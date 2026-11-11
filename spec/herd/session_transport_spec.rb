@@ -116,6 +116,34 @@ RSpec.describe Herd::Session, :ssh_story do
     end
   end
 
+  it "drops sudo-rs's wrapping around our prompt wherever the packets split it" do
+    output = "before\n[sudo: HERD_SUDO: ] Password: \r\nroot\r\n"
+    prompt_end = output.index("] Password")
+
+    (1...output.bytesize).each do |cut|
+      @socket = @connection = @transport = nil
+      story do |server|
+        channel = opens_command(server, "sudo -p 'HERD_SUDO: ' whoami")
+        channel.gets_data(output[0...cut])
+        if cut >= prompt_end
+          channel.sends_data("T0pS3kr3t\n")
+          channel.gets_data(output[cut..])
+        else
+          channel.inject_remote_delay!
+          channel.gets_data(output[cut...prompt_end])
+          channel.sends_data("T0pS3kr3t\n")
+          channel.gets_data(output[prompt_end..])
+        end
+        finishes(channel)
+      end
+
+      assert_scripted do
+        session = described_class.new(nil, connection, "T0pS3kr3t", log)
+        expect(session.sudo("whoami")).to eq("before\nroot\r\n"), "split at #{cut}"
+      end
+    end
+  end
+
   it "recognizes sudo's default prompt arriving one byte per packet" do
     story do |server|
       channel = opens_command(server, "sudo -p 'HERD_SUDO: ' whoami")

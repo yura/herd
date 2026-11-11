@@ -43,6 +43,8 @@ module Herd
     SUDO_PROMPT = "HERD_SUDO: "
     # sudo prints its default prompt instead of ours when a sudoers rule sets passprompt_override.
     SUDO_DEFAULT_PROMPT = "[sudo] password for "
+    # sudo-rs wraps -p as "[sudo: HERD_SUDO: ] Password: "; the tail after ours is eaten as feedback.
+    SUDO_RS_PROMPT = "[sudo: #{SUDO_PROMPT}".freeze
 
     # The prefix every sudo call goes through; the prompt is how channel_run knows to send the password.
     def sudo_prefix
@@ -319,7 +321,9 @@ module Herd
     # ends with the user name and ": ", so it only counts once that ": " has arrived.
     def sudo_prompt_in(buffer)
       if (at = buffer.index(SUDO_PROMPT.b))
-        return [at, at + SUDO_PROMPT.bytesize]
+        prompt_end = at + SUDO_PROMPT.bytesize
+        at = prompt_end - SUDO_RS_PROMPT.bytesize if buffer[0...prompt_end].end_with?(SUDO_RS_PROMPT.b)
+        return [at, prompt_end]
       end
 
       at = buffer.index(SUDO_DEFAULT_PROMPT.b) or return
@@ -332,7 +336,7 @@ module Herd
       at = buffer.rindex(SUDO_DEFAULT_PROMPT.b)
       return buffer.bytesize - at if at
 
-      [SUDO_PROMPT.b, SUDO_DEFAULT_PROMPT.b].map do |prompt|
+      [SUDO_PROMPT.b, SUDO_RS_PROMPT.b, SUDO_DEFAULT_PROMPT.b].map do |prompt|
         (1...prompt.bytesize).reverse_each.find { |n| buffer.end_with?(prompt[0, n]) } || 0
       end.max
     end
